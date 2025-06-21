@@ -59,37 +59,47 @@ export interface Routine {
 
 export interface TrainingSession {
   id: string;
-  routineId: string;
+  userId: string;
+  routineId: string | null;
+  routineName?: string | null;
   routine?: Routine;
   startTime: string;
   endTime?: string;
+  isActive: boolean;
   exercises: SessionExercise[];
   currentExerciseIndex?: number;
   currentSetIndex?: number;
   isPaused?: boolean;
-  pausedAt?: string;
+  pausedAt?: string | null;
   resumedAt?: string;
+  notes?: string;
   createdAt: string;
+  updatedAt: string;
 }
 
 export interface SessionExercise {
-  id: string;
-  sessionId: string;
   exerciseId: string;
+  exerciseName?: string;
   exercise?: Exercise;
-  sets: SessionSet[];
+  targetSets: number;
+  targetReps: string;
+  targetWeight?: number | null;
+  restTime?: number;
+  notes?: string;
   order: number;
+  muscleGroups?: string[];
+  sets: SessionSet[];
 }
 
 export interface SessionSet {
   id: string;
-  sessionExerciseId: string;
   setNumber: number;
-  reps: number;
-  weight: number;
+  reps: number | null;
+  weight: number | null;
   completed: boolean;
-  notes?: string;
-  completedAt?: string;
+  notes?: string | null;
+  startTime?: string | null;
+  endTime?: string | null;
 }
 
 export interface SharedRoutine {

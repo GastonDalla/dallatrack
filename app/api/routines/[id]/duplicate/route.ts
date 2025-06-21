@@ -34,15 +34,24 @@ export async function POST(
       timesPerformed: 0,
       lastPerformed: undefined,
       averageRating: undefined,
-      exercises: originalRoutine.exercises.map(exercise => ({
-        ...exercise,
-        id: new ObjectId().toString(),
-        sets: exercise.sets.map(set => ({
-          ...set,
-          id: new ObjectId().toString(),
-          routineExerciseId: new ObjectId().toString()
-        }))
-      }))
+      exercises: originalRoutine.exercises.map(exercise => {
+        const newExercise = {
+          ...exercise,
+          id: new ObjectId().toString()
+        };
+
+        if (Array.isArray(exercise.sets)) {
+          newExercise.sets = exercise.sets.map(set => ({
+            ...set,
+            id: new ObjectId().toString(),
+            routineExerciseId: new ObjectId().toString()
+          }));
+        } else {
+          newExercise.sets = exercise.sets;
+        }
+
+        return newExercise;
+      })
     }
 
     const result = await db.collection('routines').insertOne(duplicatedRoutine)

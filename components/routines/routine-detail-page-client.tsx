@@ -39,7 +39,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Routine } from "@/types";
-import { useTranslations } from '@/contexts/LanguageContext'
+import { useTranslations, useLanguage } from '@/contexts/LanguageContext'
 
 interface Props {
   routineId: string;
@@ -50,6 +50,7 @@ export function RoutineDetailPageClient({ routineId }: Props) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const t = useTranslations();
+  const { language } = useLanguage();
 
   const calculateEstimatedDuration = (routine: Routine): number => {
     if (!routine.exercises || routine.exercises.length === 0) return 0;
@@ -101,15 +102,15 @@ export function RoutineDetailPageClient({ routineId }: Props) {
     onSuccess: (newRoutine) => {
       queryClient.invalidateQueries({ queryKey: ['routines'] })
       toast({
-        title: "Rutina duplicada",
-        description: "Se ha creado una copia de tu rutina.",
+        title: t.routines.routineDuplicated,
+        description: t.routines.routineDuplicatedDescription,
       })
       router.push(`/dashboard/routines/${newRoutine.id}`)
     },
     onError: (error: any) => {
       toast({
-        title: "Error",
-        description: error?.data?.error || "No se pudo duplicar la rutina.",
+        title: t.common.error,
+        description: error?.data?.error || t.routines.failedToDuplicate,
         variant: "destructive"
       })
     }
@@ -124,15 +125,15 @@ export function RoutineDetailPageClient({ routineId }: Props) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['routines'] })
       toast({
-        title: "Rutina eliminada",
-        description: "La rutina se ha eliminado correctamente.",
+        title: t.routines.routineDeleted,
+        description: t.routines.routineDeletedSuccess,
       })
       router.push('/dashboard/routines')
     },
     onError: (error: any) => {
       toast({
-        title: "Error",
-        description: error?.data?.error || "No se pudo eliminar la rutina.",
+        title: t.common.error,
+        description: error?.data?.error || t.routines.failedToDelete,
         variant: "destructive"
       })
     }
@@ -141,15 +142,15 @@ export function RoutineDetailPageClient({ routineId }: Props) {
   useEffect(() => {
     if (error) {
       toast({
-        title: "Error",
-        description: "No se pudo cargar la rutina.",
+        title: t.common.error,
+        description: t.routines.failedToLoadRoutine,
         variant: "destructive",
       })
     }
-  }, [error, toast])
+  }, [error, toast, t])
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('es-ES', {
+    return new Date(dateString).toLocaleDateString(language === 'es' ? 'es-ES' : 'en-US', {
       year: 'numeric',
       month: 'long',
       day: 'numeric'
@@ -157,7 +158,7 @@ export function RoutineDetailPageClient({ routineId }: Props) {
   };
 
   const formatLastPerformed = (dateString?: string) => {
-    if (!dateString) return "Nunca";
+    if (!dateString) return t.training.never;
     
     const date = new Date(dateString);
     const now = new Date();
@@ -166,21 +167,36 @@ export function RoutineDetailPageClient({ routineId }: Props) {
     const diffHours = Math.floor(diffTime / (1000 * 60 * 60));
     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
   
-    if (diffTime < 0 || diffMinutes < 1) return "Hace un momento";
-    if (diffMinutes < 60) return `Hace ${diffMinutes} min`;
-    if (diffHours < 24) return `Hace ${diffHours}h`;
-    if (diffDays === 1) return "Ayer";
-    if (diffDays < 7) return `Hace ${diffDays} días`;
-    if (diffDays < 30) return `Hace ${Math.ceil(diffDays / 7)} semanas`;
-    return `Hace ${Math.ceil(diffDays / 30)} meses`;
+    if (diffTime < 0 || diffMinutes < 1) return language === 'es' ? "Hace un momento" : "Just now";
+    if (diffMinutes < 60) return `${language === 'es' ? 'Hace' : ''} ${diffMinutes} min${language === 'en' ? ' ago' : ''}`;
+    if (diffHours < 24) return `${language === 'es' ? 'Hace' : ''} ${diffHours}h${language === 'en' ? ' ago' : ''}`;
+    if (diffDays === 1) return t.training.yesterday;
+    if (diffDays < 7) return language === 'es' ? `Hace ${diffDays} días` : `${diffDays} days ago`;
+    if (diffDays < 30) return language === 'es' ? `Hace ${Math.ceil(diffDays / 7)} semanas` : `${Math.ceil(diffDays / 7)} weeks ago`;
+    return language === 'es' ? `Hace ${Math.ceil(diffDays / 30)} meses` : `${Math.ceil(diffDays / 30)} months ago`;
   };
 
   const getDifficultyColor = (difficulty: string) => {
     switch (difficulty) {
-      case 'principiante': return 'bg-green-500';
-      case 'intermedio': return 'bg-yellow-500';
-      case 'avanzado': return 'bg-red-500';
+      case 'principiante':
+      case 'beginner': return 'bg-green-500';
+      case 'intermedio':
+      case 'intermediate': return 'bg-yellow-500';
+      case 'avanzado':
+      case 'advanced': return 'bg-red-500';
       default: return 'bg-gray-500';
+    }
+  };
+
+  const getDifficultyLabel = (difficulty: string) => {
+    switch (difficulty) {
+      case 'principiante':
+      case 'beginner': return t.training.beginner;
+      case 'intermedio':
+      case 'intermediate': return t.training.intermediate;
+      case 'avanzado':
+      case 'advanced': return t.training.advanced;
+      default: return difficulty;
     }
   };
 
@@ -208,7 +224,7 @@ export function RoutineDetailPageClient({ routineId }: Props) {
         <div className="flex items-center justify-center py-12">
           <div className="text-center">
             <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
-            <p className="text-muted-foreground">{t.routines.loadingRoutine || "Cargando rutina..."}</p>
+            <p className="text-muted-foreground">{t.routines.loadingRoutine}</p>
           </div>
         </div>
       </div>
@@ -219,7 +235,7 @@ export function RoutineDetailPageClient({ routineId }: Props) {
     return (
       <div className="container mx-auto px-4 py-6 md:py-10">
         <div className="text-center py-12">
-          <h3 className="text-lg font-medium text-foreground">{t.routines.routineNotFound || "Rutina no encontrada"}</h3>
+          <h3 className="text-lg font-medium text-foreground">{t.routines.routineNotFound}</h3>
           <Button className="mt-4" onClick={() => router.back()}>
             <ArrowLeft className="h-4 w-4 mr-2" />
             {t.common.back}
@@ -245,24 +261,14 @@ export function RoutineDetailPageClient({ routineId }: Props) {
                 variant="secondary" 
                 className={`text-white ${getDifficultyColor((routine as any).difficulty || 'intermedio')}`}
               >
-                {((routine as any).difficulty || 'intermedio').charAt(0).toUpperCase() + ((routine as any).difficulty || 'intermedio').slice(1)}
+                {getDifficultyLabel((routine as any).difficulty || 'intermedio')}
               </Badge>
               <span className="text-muted-foreground">•</span>
               <span className="text-sm text-muted-foreground">
-                {calculateEstimatedDuration(routine)} {t.training.minutes} {t.dashboard.progressOverview || "aprox."}.
+                {calculateEstimatedDuration(routine)} {t.training.minutes} {t.routines.approximateTime}
               </span>
             </div>
           </div>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm">
-            <Share2 className="h-4 w-4 mr-2" />
-            {t.routines.shareRoutine || "Compartir"}
-          </Button>
-          <Button variant="outline" size="sm">
-            <Download className="h-4 w-4 mr-2" />
-            {t.routines.exportRoutine || "Exportar"}
-          </Button>
         </div>
       </div>
 
@@ -283,14 +289,14 @@ export function RoutineDetailPageClient({ routineId }: Props) {
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-foreground">
                 <BarChart3 className="h-5 w-5" />
-                {t.routines.routineStats || "Estadísticas de la Rutina"}
+                {t.routines.routineStats}
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                 <div className="text-center">
                   <div className="text-2xl font-bold text-foreground">{routine.exercises.length}</div>
-                  <p className="text-sm text-muted-foreground">{t.common.exercises || "Ejercicios"}</p>
+                  <p className="text-sm text-muted-foreground">{t.training.exercises}</p>
                 </div>
                 <div className="text-center">
                   <div className="text-2xl font-bold text-foreground">
@@ -308,7 +314,7 @@ export function RoutineDetailPageClient({ routineId }: Props) {
                       return acc + setsCount;
                     }, 0)}
                   </div>
-                  <p className="text-sm text-muted-foreground">{t.routines.totalSets || "Sets totales"}</p>
+                  <p className="text-sm text-muted-foreground">{t.routines.totalSets}</p>
                 </div>
                 <div className="text-center">
                   <div className="text-2xl font-bold text-foreground">{calculateEstimatedDuration(routine)}min</div>
@@ -326,14 +332,14 @@ export function RoutineDetailPageClient({ routineId }: Props) {
                 <div className="flex items-center gap-2">
                   <Calendar className="h-4 w-4 text-muted-foreground" />
                   <div>
-                    <p className="text-sm text-muted-foreground">Último entrenamiento</p>
+                    <p className="text-sm text-muted-foreground">{t.routines.lastWorkout}</p>
                     <p className="font-medium text-foreground">{formatLastPerformed((routine as any).lastPerformed)}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <Star className="h-4 w-4 text-muted-foreground" />
                   <div>
-                    <p className="text-sm text-muted-foreground">Calificación promedio</p>
+                    <p className="text-sm text-muted-foreground">{t.routines.averageRatingLabel}</p>
                     <div className="flex items-center gap-2">
                       <div className="flex">{getRatingStars(Math.round((routine as any).averageRating || 0))}</div>
                       <span className="text-sm text-foreground">{(routine as any).averageRating || 0}/5</span>
@@ -343,7 +349,7 @@ export function RoutineDetailPageClient({ routineId }: Props) {
                 <div className="flex items-center gap-2">
                   <Clock className="h-4 w-4 text-muted-foreground" />
                   <div>
-                    <p className="text-sm text-muted-foreground">Creada</p>
+                    <p className="text-sm text-muted-foreground">{t.routines.createdLabel}</p>
                     <p className="font-medium text-foreground">{formatDate(routine.createdAt)}</p>
                   </div>
                 </div>
@@ -356,17 +362,17 @@ export function RoutineDetailPageClient({ routineId }: Props) {
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-foreground">
                 <Dumbbell className="h-5 w-5" />
-                Ejercicios ({routine.exercises.length})
+                {t.training.exercises} ({routine.exercises.length})
               </CardTitle>
             </CardHeader>
             <CardContent>
               {routine.exercises.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   <Dumbbell className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p className="text-foreground">No hay ejercicios en esta rutina</p>
+                  <p className="text-foreground">{t.routines.noExercisesInRoutineMessage}</p>
                   <Button className="mt-4" asChild>
                     <Link href={`/dashboard/routines/${routineId}/edit`}>
-                      Agregar ejercicios
+                      {t.routines.addExercisesButton}
                     </Link>
                   </Button>
                 </div>
@@ -405,7 +411,7 @@ export function RoutineDetailPageClient({ routineId }: Props) {
                                 </div>
                                 <div>
                                   <h4 className="font-semibold text-lg text-foreground">
-                                    {routineExercise.exercise?.title || "Ejercicio"}
+                                    {routineExercise.exercise?.title || t.common.exercise}
                                   </h4>
                                   <p className="text-sm text-muted-foreground mb-2">
                                     {routineExercise.exercise?.description}
@@ -428,19 +434,19 @@ export function RoutineDetailPageClient({ routineId }: Props) {
 
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-3 text-sm">
                               <div>
-                                <span className="text-muted-foreground">Sets:</span>
+                                <span className="text-muted-foreground">{t.routines.setsLabel}</span>
                                 <span className="ml-2 font-medium text-foreground">{setsCount}</span>
                               </div>
                               <div>
-                                <span className="text-muted-foreground">Reps objetivo:</span>
+                                <span className="text-muted-foreground">{t.routines.targetRepsLabel}</span>
                                 <span className="ml-2 font-medium text-foreground">{targetReps}</span>
                               </div>
                               <div>
-                                <span className="text-muted-foreground">Peso objetivo:</span>
+                                <span className="text-muted-foreground">{t.routines.targetWeightLabel}</span>
                                 <span className="ml-2 font-medium text-foreground">{targetWeight}kg</span>
                               </div>
                               <div>
-                                <span className="text-muted-foreground">Descanso:</span>
+                                <span className="text-muted-foreground">{t.routines.restLabel}</span>
                                 <span className="ml-2 font-medium text-foreground">
                                   {(routineExercise as any).restTime ? `${(routineExercise as any).restTime}s` : "90s"}
                                 </span>
@@ -449,7 +455,7 @@ export function RoutineDetailPageClient({ routineId }: Props) {
 
                             {(routineExercise as any).notes && (
                               <div className="p-2 bg-muted/50 rounded text-sm">
-                                <strong className="text-foreground">Notas:</strong> <span className="text-muted-foreground">{(routineExercise as any).notes}</span>
+                                <strong className="text-foreground">{t.routines.notesLabel}</strong> <span className="text-muted-foreground">{(routineExercise as any).notes}</span>
                               </div>
                             )}
                           </CardContent>
@@ -467,7 +473,7 @@ export function RoutineDetailPageClient({ routineId }: Props) {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-foreground">
                   <Star className="h-5 w-5" />
-                  Últimas Calificaciones
+                  {t.routines.recentRatings}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -499,8 +505,8 @@ export function RoutineDetailPageClient({ routineId }: Props) {
                 {(routine as any).recentRatings.length === 0 && (
                   <div className="text-center py-4 text-muted-foreground">
                     <Star className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                    <p className="text-sm">Aún no hay calificaciones</p>
-                    <p className="text-xs">Completa un entrenamiento para ver calificaciones</p>
+                    <p className="text-sm">{t.routines.noRatingsYet}</p>
+                    <p className="text-xs">{t.routines.noRatingsMessage}</p>
                   </div>
                 )}
                 
@@ -508,7 +514,7 @@ export function RoutineDetailPageClient({ routineId }: Props) {
                   <div className="text-center mt-3 pt-3 border-t border-border">
                     <Button variant="outline" size="sm" asChild>
                       <Link href={`/dashboard/history?routineId=${routineId}`}>
-                        Ver todas las sesiones
+                        {t.routines.viewAllSessions}
                       </Link>
                     </Button>
                   </div>
@@ -523,17 +529,17 @@ export function RoutineDetailPageClient({ routineId }: Props) {
           {/* Quick Actions */}
           <Card className="bg-card border-border">
             <CardHeader>
-              <CardTitle className="text-foreground">Acciones</CardTitle>
+              <CardTitle className="text-foreground">{t.routines.actions}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               <Button className="w-full" onClick={startWorkout}>
                 <PlayCircle className="h-4 w-4 mr-2" />
-                Comenzar Entrenamiento
+                {t.routines.startWorkout}
               </Button>
               <Button variant="outline" className="w-full" asChild>
                 <Link href={`/dashboard/routines/${routineId}/edit`}>
                   <Edit className="h-4 w-4 mr-2" />
-                  Editar Rutina
+                  {t.routines.editRoutineAction}
                 </Link>
               </Button>
               <Button 
@@ -545,19 +551,19 @@ export function RoutineDetailPageClient({ routineId }: Props) {
                 {duplicateMutation.isPending ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Duplicando...
+                    {t.routines.duplicating}
                   </>
                 ) : (
                   <>
                     <Copy className="h-4 w-4 mr-2" />
-                    Duplicar Rutina
+                    {t.routines.duplicateRoutine}
                   </>
                 )}
               </Button>
               <Button variant="outline" className="w-full" asChild>
                 <Link href={`/dashboard/history?routineId=${routineId}`}>
                   <History className="h-4 w-4 mr-2" />
-                  Ver Historial
+                  {t.routines.viewHistory}
                 </Link>
               </Button>
             </CardContent>
@@ -566,7 +572,7 @@ export function RoutineDetailPageClient({ routineId }: Props) {
           {/* Danger Zone */}
           <Card className="bg-card border-destructive/20">
             <CardHeader>
-              <CardTitle className="text-destructive">Zona de Peligro</CardTitle>
+              <CardTitle className="text-destructive">{t.routines.dangerZone}</CardTitle>
             </CardHeader>
             <CardContent>
               <AlertDialog>
@@ -579,28 +585,27 @@ export function RoutineDetailPageClient({ routineId }: Props) {
                     {deleteMutation.isPending ? (
                       <>
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Eliminando...
+                        {t.routines.deleting}
                       </>
                     ) : (
                       <>
                         <Trash2 className="h-4 w-4 mr-2" />
-                        Eliminar Rutina
+                        {t.routines.deleteRoutineAction}
                       </>
                     )}
                   </Button>
                 </AlertDialogTrigger>
                 <AlertDialogContent className="bg-background border-border">
                   <AlertDialogHeader>
-                    <AlertDialogTitle className="text-foreground">¿Estás seguro?</AlertDialogTitle>
+                    <AlertDialogTitle className="text-foreground">{t.routines.confirmDelete}</AlertDialogTitle>
                     <AlertDialogDescription className="text-muted-foreground">
-                      Esta acción no se puede deshacer. Esto eliminará permanentemente la rutina
-                      y todos los datos asociados con ella.
+                      {t.routines.confirmDeleteDescription}
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
-                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogCancel>{t.routines.cancel}</AlertDialogCancel>
                     <AlertDialogAction onClick={deleteRoutine} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                      Eliminar
+                      {t.routines.delete}
                     </AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>

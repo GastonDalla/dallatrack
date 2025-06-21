@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ofetch } from 'ofetch'
@@ -28,7 +28,11 @@ import {
   Loader2,
   AlertCircle,
   Star,
-  Trash2
+  Trash2,
+  GripVertical,
+  ChevronDown,
+  Edit,
+  Search
 } from "lucide-react";
 import {
   Dialog,
@@ -48,11 +52,37 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
-import { TrainingSession } from "@/types";
+import { TrainingSession, Exercise, SessionExercise } from "@/types";
 import { useTranslations, useLanguage } from '@/contexts/LanguageContext';
 import Link from 'next/link'
 import { useStats } from '@/hooks/useStats'
+
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import {
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 interface LocalSet {
   id: string;
@@ -89,6 +119,85 @@ interface Props {
   sessionId: string;
 }
 
+function SortableExerciseItem({ 
+  exercise, 
+  exerciseIndex, 
+  isCurrentExercise, 
+  onSelectExercise, 
+  completedSets 
+}: {
+  exercise: any;
+  exerciseIndex: number;
+  isCurrentExercise: boolean;
+  onSelectExercise: (index: number) => void;
+  completedSets: number;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: exercise.exerciseId });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div 
+      ref={setNodeRef}
+      style={style}
+      className={`p-3 rounded-lg border transition-colors ${
+        isCurrentExercise ? 'border-primary bg-primary/10' : 'border-border bg-background'
+      } ${isDragging ? 'shadow-lg' : ''}`}
+    >
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <div
+            {...attributes}
+            {...listeners}
+            className="cursor-grab active:cursor-grabbing p-1 hover:bg-muted rounded transition-colors touch-none"
+          >
+            <GripVertical className="h-4 w-4 text-muted-foreground" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h4 className="font-medium text-foreground truncate">{exercise.exerciseName || "Ejercicio"}</h4>
+            <p className="text-sm text-muted-foreground">
+              {completedSets}/{exercise.sets.length} series completadas
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <Progress 
+            value={(completedSets / exercise.sets.length) * 100} 
+            className="w-20 h-2"
+          />
+          {!isCurrentExercise && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onSelectExercise(exerciseIndex)}
+              className="text-xs"
+            >
+              Seleccionar
+            </Button>
+          )}
+          {isCurrentExercise && (
+            <Badge variant="default" className="text-xs">Actual</Badge>
+          )}
+          {completedSets === exercise.sets.length && (
+            <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function TrainingSessionPageClient({ sessionId }: Props) {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -105,9 +214,26 @@ export function TrainingSessionPageClient({ sessionId }: Props) {
   const [sessionNotes, setSessionNotes] = useState("");
   const [deleteSetDialog, setDeleteSetDialog] = useState<{open: boolean, exerciseIndex: number, setIndex: number} | null>(null);
   const [isPaused, setIsPaused] = useState<boolean>(false);
+  const [pausedTime, setPausedTime] = useState<number>(0);
+  const [pauseStartTime, setPauseStartTime] = useState<number | null>(null);
   const restIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const durationIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const { updateStats } = useStats();
+
+  const [showAddExerciseDialog, setShowAddExerciseDialog] = useState(false);
+  const [availableExercises, setAvailableExercises] = useState<Exercise[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   const { data: session, isLoading, error } = useQuery({
     queryKey: ['training-session', sessionId],
@@ -120,7 +246,12 @@ export function TrainingSessionPageClient({ sessionId }: Props) {
 
   useEffect(() => {
     if (session) {
-      setIsPaused((session as any).isPaused || false)
+      const sessionIsPaused = (session as any).isPaused || false
+      setIsPaused(sessionIsPaused)
+
+      if (sessionIsPaused) {
+        setPauseStartTime(Date.now())
+      }
     }
   }, [session])
 
@@ -148,8 +279,7 @@ export function TrainingSessionPageClient({ sessionId }: Props) {
       let newSetIndex = currentSetIndex + 1
       
       if (newSetIndex >= updatedSets.length) {
-        newExerciseIndex += 1
-        newSetIndex = 0
+        newSetIndex = currentSetIndex 
       }
       
       const response = await ofetch<{ session: TrainingSession }>(`/api/training-sessions/${sessionId}`, {
@@ -167,11 +297,18 @@ export function TrainingSessionPageClient({ sessionId }: Props) {
       setCurrentReps(undefined)
       setCurrentWeight(undefined)
       
-      const newExerciseIndex = (updatedSession as any).currentExerciseIndex || 0
-      if (newExerciseIndex < updatedSession.exercises.length) {
-        const nextExercise = updatedSession.exercises[newExerciseIndex]
-        setRestTimer((nextExercise as any).restTime || 90)
+      const currentExerciseIndex = (updatedSession as any).currentExerciseIndex || 0
+      const currentSetIndex = (updatedSession as any).currentSetIndex || 0
+      const currentExercise = updatedSession.exercises[currentExerciseIndex]
+      
+      if (currentSetIndex < currentExercise.sets.length) {
+        setRestTimer((currentExercise as any).restTime || 90)
         setIsResting(true)
+      } else {
+        toast({
+          title: t.training.exerciseCompleted,
+          description: t.training.selectAnotherExerciseOrAddMoreSets,
+        })
       }
       
       toast({
@@ -241,9 +378,11 @@ export function TrainingSessionPageClient({ sessionId }: Props) {
     },
     onSuccess: (updatedSession) => {
       queryClient.setQueryData(['training-session', sessionId], updatedSession)
+      const wasPaused = isPaused
       setIsPaused((updatedSession as any).isPaused || false)
       
       if ((updatedSession as any).isPaused) {
+        setPauseStartTime(Date.now())
         if (durationIntervalRef.current) {
           clearInterval(durationIntervalRef.current)
         }
@@ -255,6 +394,11 @@ export function TrainingSessionPageClient({ sessionId }: Props) {
           description: "Puedes continuar cuando estés listo",
         })
       } else {
+        if (pauseStartTime) {
+          const pauseDuration = Math.floor((Date.now() - pauseStartTime) / 1000)
+          setPausedTime(prev => prev + pauseDuration)
+          setPauseStartTime(null)
+        }
         toast({
           title: "Entrenamiento reanudado",
           description: "¡Sigamos entrenando!",
@@ -270,6 +414,174 @@ export function TrainingSessionPageClient({ sessionId }: Props) {
     }
   })
 
+  const { data: exercisesData } = useQuery({
+    queryKey: ['exercises'],
+    queryFn: async () => {
+      const data = await ofetch<{ exercises: Exercise[] }>('/api/exercises')
+      return data.exercises
+    },
+    staleTime: 5 * 60 * 1000,
+  })
+
+  useEffect(() => {
+    if (exercisesData) {
+      setAvailableExercises(exercisesData)
+    }
+  }, [exercisesData])
+
+  const filteredExercises = useMemo(() => {
+    if (!session || !availableExercises) return [];
+    
+    return availableExercises
+      .filter(ex => !session.exercises.some(sessionEx => sessionEx.exerciseId === ex.id))
+      .filter(ex => 
+        ex.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        ex.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (ex as any).muscleGroups?.some((muscle: string) => 
+          muscle.toLowerCase().includes(searchTerm.toLowerCase())
+        )
+      )
+  }, [availableExercises, session?.exercises, searchTerm])
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (over && active.id !== over.id) {
+      if (!session) return;
+
+      const oldIndex = session.exercises.findIndex(ex => ex.exerciseId === active.id);
+      const newIndex = session.exercises.findIndex(ex => ex.exerciseId === over.id);
+
+      if (oldIndex !== -1 && newIndex !== -1) {
+        const newExercises = arrayMove(session.exercises, oldIndex, newIndex);
+        
+        const currentExerciseId = session.exercises[(session as any).currentExerciseIndex || 0]?.exerciseId;
+        const newCurrentIndex = newExercises.findIndex(ex => ex.exerciseId === currentExerciseId);
+
+        reorderExercisesMutation.mutate({ 
+          exercises: newExercises,
+          newCurrentIndex: newCurrentIndex >= 0 ? newCurrentIndex : 0
+        });
+      }
+    }
+  };
+
+  const reorderExercisesMutation = useMutation({
+    mutationFn: async ({ exercises, newCurrentIndex }: { 
+      exercises: any[], 
+      newCurrentIndex: number 
+    }) => {
+      const response = await ofetch<{ session: TrainingSession }>(`/api/training-sessions/${sessionId}`, {
+        method: 'PUT',
+        body: { 
+          exercises: exercises.map((ex, index) => ({ ...ex, order: index + 1 })),
+          currentExerciseIndex: newCurrentIndex
+        }
+      })
+      return response.session
+    },
+    onSuccess: (updatedSession) => {
+      queryClient.setQueryData(['training-session', sessionId], updatedSession)
+      toast({
+        title: "Ejercicios reordenados",
+        description: "El orden de los ejercicios se ha actualizado",
+      })
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error?.data?.error || "Error al reordenar ejercicios",
+        variant: "destructive"
+      })
+    }
+  })
+
+  const selectCurrentExercise = (exerciseIndex: number) => {
+    if (!session) return;
+    
+    selectExerciseMutation.mutate({ 
+      exerciseIndex,
+      setIndex: 0
+    });
+  };
+
+  const selectExerciseMutation = useMutation({
+    mutationFn: async ({ exerciseIndex, setIndex }: { 
+      exerciseIndex: number, 
+      setIndex: number 
+    }) => {
+      const response = await ofetch<{ session: TrainingSession }>(`/api/training-sessions/${sessionId}`, {
+        method: 'PUT',
+        body: { 
+          currentExerciseIndex: exerciseIndex,
+          currentSetIndex: setIndex
+        }
+      })
+      return response.session
+    },
+    onSuccess: (updatedSession) => {
+      queryClient.setQueryData(['training-session', sessionId], updatedSession)
+      const currentExercise = updatedSession.exercises[updatedSession.currentExerciseIndex || 0];
+      const exerciseName = (currentExercise as any)?.exerciseName || currentExercise?.exercise?.title || "ejercicio";
+      toast({
+        title: "Ejercicio seleccionado",
+        description: `Ahora puedes continuar con ${exerciseName}`,
+      })
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error?.data?.error || "Error al seleccionar ejercicio",
+        variant: "destructive"
+      })
+    }
+  })
+
+  const addExerciseToSession = (exerciseId: string) => {
+    if (!session) return;
+
+    const selectedExercise = availableExercises.find(ex => ex.id === exerciseId);
+    if (!selectedExercise) {
+      toast({
+        title: "Error",
+        description: "Ejercicio no encontrado",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    addExerciseMutation.mutate({ exerciseId, selectedExercise });
+  };
+
+  const addExerciseMutation = useMutation({
+    mutationFn: async ({ exerciseId }: {
+      exerciseId: string,
+      selectedExercise: Exercise
+    }) => {
+      const response = await ofetch<{ session: TrainingSession }>(`/api/training-sessions/${sessionId}/exercises`, {
+        method: 'POST',
+        body: { exerciseId }
+      })
+      return response.session
+    },
+    onSuccess: (updatedSession) => {
+      queryClient.setQueryData(['training-session', sessionId], updatedSession)
+      setShowAddExerciseDialog(false)
+      setSearchTerm('')
+      toast({
+        title: "Ejercicio agregado",
+        description: "El ejercicio se ha agregado al entrenamiento",
+      })
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error?.data?.error || "Error al agregar ejercicio",
+        variant: "destructive"
+      })
+    }
+  })
+
   useEffect(() => {
     const sessionData = session
     const isSessionActive = sessionData && (sessionData as any)?.isActive
@@ -279,18 +591,20 @@ export function TrainingSessionPageClient({ sessionId }: Props) {
       const updateDuration = () => {
         const startTime = new Date(sessionStartTime).getTime();
         const now = Date.now();
-        const duration = Math.floor((now - startTime) / 1000);
-        setSessionDuration(duration);
+        const totalElapsed = Math.floor((now - startTime) / 1000);
+        const actualDuration = totalElapsed - pausedTime;
+        setSessionDuration(Math.max(0, actualDuration));
       };
 
       updateDuration();
       const interval = setInterval(updateDuration, 1000);
+      durationIntervalRef.current = interval;
 
       return () => {
         clearInterval(interval);
       };
     }
-  }, [session, isPaused]);
+  }, [session, isPaused, pausedTime]);
 
   useEffect(() => {
     if (isResting && restTimer > 0 && !isPaused) {
@@ -827,47 +1141,111 @@ export function TrainingSessionPageClient({ sessionId }: Props) {
       {/* All Exercises Overview */}
       <Card className="bg-card border-border">
         <CardHeader>
-          <CardTitle className="text-foreground">{t.training.workoutSummary}</CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-foreground">Ejercicios del entrenamiento</CardTitle>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowAddExerciseDialog(true)}
+              className="flex items-center gap-1"
+            >
+              <Plus className="h-3 w-3" />
+              Agregar ejercicio
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
-          <div className="space-y-3">
-            {session.exercises.map((exercise, exerciseIndex) => {
-              const completedSets = exercise.sets.filter(set => set.completed).length;
-              const isCurrentExercise = exerciseIndex === ((session as any).currentExerciseIndex || 0);
-              
-              return (
-                <div 
-                  key={exercise.id} 
-                  className={`p-3 rounded-lg border transition-colors ${
-                    isCurrentExercise ? 'border-primary bg-primary/10' : 'border-border bg-background'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h4 className="font-medium text-foreground">{(exercise as any).exerciseName || t.common.exercise}</h4>
-                      <p className="text-sm text-muted-foreground">
-                        {completedSets}/{exercise.sets.length} {t.training.setsCompleted}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Progress 
-                        value={(completedSets / exercise.sets.length) * 100} 
-                        className="w-20 h-2"
-                      />
-                      {isCurrentExercise && (
-                        <Badge variant="default" className="text-xs">{t.training.current}</Badge>
-                      )}
-                      {completedSets === exercise.sets.length && (
-                        <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          <DndContext 
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext 
+              items={session.exercises.map(ex => ex.exerciseId)}
+              strategy={verticalListSortingStrategy}
+            >
+              <div className="space-y-3">
+                {session.exercises.map((exercise, exerciseIndex) => {
+                  const completedSets = exercise.sets.filter(set => set.completed).length;
+                  const isCurrentExercise = exerciseIndex === ((session as any).currentExerciseIndex || 0);
+                  
+                  return (
+                    <SortableExerciseItem
+                      key={exercise.exerciseId}
+                      exercise={exercise}
+                      exerciseIndex={exerciseIndex}
+                      isCurrentExercise={isCurrentExercise}
+                      onSelectExercise={selectCurrentExercise}
+                      completedSets={completedSets}
+                    />
+                  );
+                })}
+              </div>
+            </SortableContext>
+          </DndContext>
         </CardContent>
       </Card>
+
+      {/* Dialog para agregar ejercicio */}
+      <Dialog open={showAddExerciseDialog} onOpenChange={setShowAddExerciseDialog}>
+        <DialogContent className="max-w-2xl bg-background border-border">
+          <DialogHeader>
+            <DialogTitle className="text-foreground">Agregar ejercicio</DialogTitle>
+            <DialogDescription className="text-muted-foreground">
+              Busca y selecciona un ejercicio para agregar al entrenamiento actual
+            </DialogDescription>
+          </DialogHeader>
+          
+          {/* Buscador */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar ejercicios por nombre, descripción o grupo muscular..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10 bg-background border-input text-foreground"
+            />
+          </div>
+
+          <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
+            {filteredExercises.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <Dumbbell className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                {searchTerm ? (
+                  <p>No se encontraron ejercicios que coincidan con &ldquo;{searchTerm}&rdquo;</p>
+                ) : (
+                  <p>Todos los ejercicios disponibles ya están en tu entrenamiento</p>
+                )}
+              </div>
+            ) : (
+              filteredExercises.map(exercise => (
+                <Card 
+                  key={exercise.id} 
+                  className="cursor-pointer hover:bg-muted/50 transition-colors bg-card border-border" 
+                  onClick={() => addExerciseToSession(exercise.id)}
+                >
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <h4 className="font-medium text-foreground">{exercise.title}</h4>
+                        <p className="text-sm text-muted-foreground">{exercise.description}</p>
+                        <div className="flex gap-1 mt-2">
+                          {(exercise as any).muscleGroups?.map((muscle: string) => (
+                            <Badge key={muscle} variant="secondary" className="text-xs">
+                              {muscle}
+                            </Badge>
+                          )) || []}
+                        </div>
+                      </div>
+                      <Plus className="h-4 w-4 text-muted-foreground" />
+                    </div>
+                  </CardContent>
+                </Card>
+              ))
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Finish Workout Dialog */}
       <Dialog open={showFinishDialog} onOpenChange={setShowFinishDialog}>

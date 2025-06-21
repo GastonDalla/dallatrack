@@ -39,7 +39,11 @@ export function DashboardClient() {
   } = useQuery({
     queryKey: ['current-user'],
     queryFn: async () => {
-      const data = await ofetch<{ name: string; email: string }>('/api/user/profile')
+      const data = await ofetch<{ 
+        name: string; 
+        email: string; 
+        profile?: { weeklyGoal?: number } 
+      }>('/api/user/profile')
       return data
     },
     staleTime: 15 * 60 * 1000, 
@@ -103,7 +107,7 @@ export function DashboardClient() {
     return total + session.exercises.reduce((sessionTotal, exercise) => {
       return sessionTotal + exercise.sets
         .filter(set => set.completed)
-        .reduce((setTotal, set) => setTotal + (set.weight * set.reps), 0)
+        .reduce((setTotal, set) => setTotal + ((set.weight || 0) * (set.reps || 0)), 0)
     }, 0)
   }, 0)
 
@@ -129,7 +133,7 @@ export function DashboardClient() {
     return `${diffInMinutes} min`
   }
 
-  const weeklyGoal = 3
+  const weeklyGoal = user?.profile?.weeklyGoal || 3
   const weeklyProgress = (thisWeekSessions.length / weeklyGoal) * 100
 
   const getGreeting = () => {
@@ -314,10 +318,10 @@ export function DashboardClient() {
                         <span><strong>{session.exercises.length}</strong> {t.dashboard.exercises}</span>
                         <span>•</span>
                         <span><strong>{session.exercises.reduce((total, ex) => total + ex.sets.filter(s => s.completed).length, 0)}</strong> {t.dashboard.completedSetsCount}</span>
-                        {session.exercises.reduce((total, ex) => total + ex.sets.filter(s => s.completed).reduce((acc, set) => acc + (set.weight * set.reps), 0), 0) > 0 && (
+                        {session.exercises.reduce((total, ex) => total + ex.sets.filter(s => s.completed).reduce((acc, set) => acc + ((set.weight || 0) * (set.reps || 0)), 0), 0) > 0 && (
                           <>
                             <span>•</span>
-                            <span><strong>{Math.round(session.exercises.reduce((total, ex) => total + ex.sets.filter(s => s.completed).reduce((acc, set) => acc + (set.weight * set.reps), 0), 0)).toLocaleString()}</strong> {t.dashboard.kgMoved}</span>
+                            <span><strong>{Math.round(session.exercises.reduce((total, ex) => total + ex.sets.filter(s => s.completed).reduce((acc, set) => acc + ((set.weight || 0) * (set.reps || 0)), 0), 0)).toLocaleString()}</strong> {t.dashboard.kgMoved}</span>
                           </>
                         )}
                       </div>

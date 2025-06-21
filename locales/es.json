@@ -73,7 +73,14 @@
     "searching": "Buscando",
     "adding": "Agregando",
     "sharing": "Compartiendo",
-    "copied": "Copiado"
+    "copied": "Copiado",
+    "times": "veces",
+    "justNow": "Hace un momento",
+    "ago": "hace",
+    "days": "días",
+    "weeks": "semanas",
+    "months": "meses",
+    "freeWorkout": "Entrenamiento Libre"
   },
   "language": {
     "title": "Idioma",
@@ -306,8 +313,6 @@
     "routineNotFound": "Rutina no encontrada",
     "routineStats": "Estadísticas de la Rutina",
     "totalSets": "Sets totales",
-    "shareRoutine": "Compartir",
-    "exportRoutine": "Exportar",
     "routineDeleted": "Rutina eliminada",
     "routineDeletedSuccess": "La rutina se ha eliminado correctamente.",
     "failedToDelete": "Hubo un problema eliminando la rutina.",
@@ -316,7 +321,38 @@
     "lastPerformed": "Último entrenamiento",
     "averageRating": "Calificación promedio",
     "created": "Creada",
-    "exercisesCount": "Ejercicios ({count})"
+    "exercisesCount": "Ejercicios ({count})",
+    "approximateTime": "aprox.",
+    "startWorkout": "Comenzar Entrenamiento",
+    "editRoutineAction": "Editar Rutina",
+    "duplicateRoutine": "Duplicar Rutina",
+    "duplicating": "Duplicando...",
+    "viewHistory": "Ver Historial",
+    "dangerZone": "Zona de Peligro",
+    "deleteRoutineAction": "Eliminar Rutina",
+    "deleting": "Eliminando...",
+    "confirmDelete": "¿Estás seguro?",
+    "confirmDeleteDescription": "Esta acción no se puede deshacer. Esto eliminará permanentemente la rutina y todos los datos asociados con ella.",
+    "cancel": "Cancelar",
+    "delete": "Eliminar",
+    "noExercisesInRoutineMessage": "No hay ejercicios en esta rutina",
+    "addExercisesButton": "Agregar ejercicios",
+    "setsLabel": "Sets:",
+    "targetRepsLabel": "Reps objetivo:",
+    "targetWeightLabel": "Peso objetivo:",
+    "restLabel": "Descanso:",
+    "notesLabel": "Notas:",
+    "recentRatings": "Últimas Calificaciones",
+    "noRatingsYet": "Aún no hay calificaciones",
+    "noRatingsMessage": "Completa un entrenamiento para ver calificaciones",
+    "viewAllSessions": "Ver todas las sesiones",
+    "routineDuplicated": "Rutina duplicada",
+    "routineDuplicatedDescription": "Se ha creado una copia de tu rutina.",
+    "failedToDuplicate": "No se pudo duplicar la rutina.",
+    "failedToLoadRoutine": "No se pudo cargar la rutina.",
+    "lastWorkout": "Último entrenamiento",
+    "averageRatingLabel": "Calificación promedio",
+    "createdLabel": "Creada"
   },
   "exercises": {
     "title": "Ejercicios",
@@ -505,7 +541,11 @@
     "deleteSetSuccess": "Set eliminado exitosamente",
     "addSetSuccess": "Set añadido exitosamente",
     "cannotDeleteLastSet": "No se puede eliminar el último set del ejercicio",
-    "cannotDeleteCompletedSet": "No se puede eliminar un set ya completado"
+    "cannotDeleteCompletedSet": "No se puede eliminar un set ya completado",
+    "lastRoutine": "Última Rutina",
+    "lastRoutineDescription": "Continúa con tu rutina más reciente",
+    "recentActivity": "Actividad Reciente",
+    "repeatWorkout": "Repetir"
   },
   "history": {
     "title": "Historial",
@@ -1010,8 +1050,8 @@
       "intermediate": "Intermedio",
       "advanced": "Avanzado",
       "professional": "Profesional",
-      "metric": "Métrico (kg, cm)",
-      "imperial": "Imperial (lbs, ft)"
+      "weeklyGoal": "Meta Semanal",
+      "weeklyGoalDescription": "Número de entrenamientos que quieres completar por semana"
     },
     "privacy": {
       "title": "Configuración de Privacidad",
@@ -1072,6 +1112,7 @@
       "unlockedAchievements": "Logros desbloqueados ({unlocked} de {total})",
       "noAchievementsYet": "Aún no hay logros desbloqueados",
       "noCategoryAchievements": "No hay logros desbloqueados en esta categoría aún.",
+      "noCategoryAchievementsMessage": "No hay logros desbloqueados en esta categoría aún.",
       "all": "Todos ({count})",
       "progress": {
         "title": "Progreso hacia Logros",
@@ -1177,7 +1218,18 @@
       "save": "Guardar Cambios",
       "saving": "Guardando...",
       "success": "Perfil actualizado correctamente",
-      "error": "Error al actualizar el perfil"
+      "error": "Error al actualizar el perfil",
+      "successTitle": "Éxito",
+      "errorTitle": "Error",
+      "profileSetPublic": "Perfil configurado como público",
+      "profileSetPrivate": "Perfil configurado como privado",
+      "othersCanSeeProfile": "Otros usuarios podrán ver tu perfil",
+      "profileNowPrivate": "Tu perfil ahora es privado",
+      "profileLinkCopied": "Link del perfil copiado",
+      "linkCopiedToClipboard": "El enlace se ha copiado al portapapeles",
+      "errorMigratingStats": "Error al migrar estadísticas",
+      "tryAgainLater": "Inténtalo de nuevo más tarde",
+      "statsProcessed": "Se procesaron {count} entrenamientos. {achievements} logros desbloqueados."
     }
   }
 } 

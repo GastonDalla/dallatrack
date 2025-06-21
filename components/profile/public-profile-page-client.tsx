@@ -11,7 +11,7 @@ import { Progress } from "@/components/ui/progress"
 import { Skeleton } from "@/components/ui/skeleton"
 import { User, Trophy, Target, Calendar, Globe, ArrowLeft, Share2, LogIn } from "lucide-react"
 import { useToast } from '@/hooks/use-toast'
-import { useTranslations } from '@/contexts/LanguageContext'
+import { useTranslations, useLanguage } from '@/contexts/LanguageContext'
 import { achievements, getNextAchievements, getAchievementProgress, getRarityColor, type UserStats } from '@/lib/achievements'
 import { useAuth } from "@/hooks/useAuth"
 import Link from "next/link"
@@ -47,7 +47,36 @@ export function PublicProfilePageClient({ userId }: PublicProfilePageClientProps
   const [selectedCategory, setSelectedCategory] = useState<string>('all')
   const { user } = useAuth() 
   const t = useTranslations()
+  const { language } = useLanguage()
   const { toast } = useToast()
+
+  const getFitnessLevelLabel = (level: string) => {
+    switch (level) {
+      case 'principiante':
+      case 'beginner': return t.profile.personalInfo.beginner
+      case 'intermedio':
+      case 'intermediate': return t.profile.personalInfo.intermediate
+      case 'avanzado':
+      case 'advanced': return t.profile.personalInfo.advanced
+      case 'profesional':
+      case 'professional': return t.profile.personalInfo.professional
+      default: return level
+    }
+  }
+
+  const getFitnessLevelColor = (level: string) => {
+    switch (level) {
+      case 'principiante':
+      case 'beginner': return 'bg-green-100 text-green-700 border-green-200'
+      case 'intermedio':
+      case 'intermediate': return 'bg-yellow-100 text-yellow-700 border-yellow-200'
+      case 'avanzado':
+      case 'advanced': return 'bg-orange-100 text-orange-700 border-orange-200'
+      case 'profesional':
+      case 'professional': return 'bg-red-100 text-red-700 border-red-200'
+      default: return 'bg-gray-100 text-gray-700 border-gray-200'
+    }
+  }
 
   const {
     data: profile,
@@ -385,8 +414,8 @@ export function PublicProfilePageClient({ userId }: PublicProfilePageClientProps
                   <h3 className="text-xl font-semibold">{profile.name}</h3>
                   <div className="flex items-center gap-2 mt-2">
                     {profile.profile.fitnessLevel && (
-                      <Badge variant="secondary">
-                        {profile.profile.fitnessLevel}
+                      <Badge variant="secondary" className={`${getFitnessLevelColor(profile.profile.fitnessLevel)} font-medium`}>
+                        {getFitnessLevelLabel(profile.profile.fitnessLevel)}
                       </Badge>
                     )}
                     <Badge variant="outline" className="flex items-center gap-1">
@@ -395,7 +424,14 @@ export function PublicProfilePageClient({ userId }: PublicProfilePageClientProps
                     </Badge>
                   </div>
                   <p className="text-sm text-muted-foreground mt-1">
-                    {t.profile.public.memberSince.replace('{date}', new Date(profile.createdAt).toLocaleDateString())}
+                    {t.profile.public.memberSince.replace('{date}', new Date(profile.createdAt).toLocaleDateString(
+                      language === 'es' ? 'es-ES' : 'en-US',
+                      { 
+                        year: 'numeric', 
+                        month: 'long', 
+                        day: 'numeric' 
+                      }
+                    ))}
                   </p>
                 </div>
               </div>

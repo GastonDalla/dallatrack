@@ -54,6 +54,26 @@ import { useToast } from '@/hooks/use-toast'
 import { Routine, Exercise, RoutineExercise, RoutineSet } from '@/types'
 import { useTranslations } from '@/contexts/LanguageContext'
 
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import {
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+
 interface LocalRoutineSet {
   id: string;
   routineExerciseId: string;
@@ -77,6 +97,211 @@ interface Props {
   routineId: string;
 }
 
+function SortableRoutineExercise({ 
+  routineExercise, 
+  onUpdate, 
+  onRemove,
+  index
+}: {
+  routineExercise: LocalRoutineExercise;
+  onUpdate: (routineExerciseId: string, updates: Partial<LocalRoutineExercise>) => void;
+  onRemove: (routineExerciseId: string) => void;
+  index: number;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: routineExercise.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  const representativeReps = routineExercise.sets?.[0]?.targetReps || "10";
+  const representativeWeight = routineExercise.sets?.[0]?.targetWeight || 0;
+
+  return (
+    <div 
+      ref={setNodeRef}
+      style={style}
+      className={`${isDragging ? 'shadow-lg' : ''}`}
+    >
+      <Card className="bg-muted/20 border-border">
+        <CardContent className="p-4">
+          <div className="flex items-start gap-4">
+            <div className="flex items-center gap-2">
+              <div
+                {...attributes}
+                {...listeners}
+                className="cursor-grab active:cursor-grabbing p-1 hover:bg-muted rounded transition-colors touch-none"
+              >
+                <GripVertical className="h-4 w-4 text-muted-foreground" />
+              </div>
+              <span className="text-sm font-medium text-foreground">{index + 1}</span>
+            </div>
+            
+            <div className="flex-1">
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="font-medium text-foreground">{routineExercise.exercise?.title}</h4>
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={() => onRemove(routineExercise.id)}
+                  className="text-destructive hover:text-destructive"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+              
+              <div className="flex gap-1 mb-3">
+                {((routineExercise.exercise as any)?.muscleGroups || []).map((muscle: string, muscleIdx: number) => (
+                  <Badge key={`muscle-${routineExercise.id}-${muscleIdx}-${muscle}`} variant="secondary" className="text-xs">
+                    {muscle}
+                  </Badge>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div>
+                  <label className="text-xs text-muted-foreground">Sets</label>
+                  <Input 
+                    type="number"
+                    value={routineExercise.sets?.length || 1}
+                    onChange={(e) => {
+                      const newSetCount = Math.max(1, parseInt(e.target.value) || 1)
+                      const currentSets = routineExercise.sets || []
+                      
+                      const newSets = Array.from({ length: newSetCount }, (_, i) => {
+                        if (currentSets[i]) {
+                          return { ...currentSets[i] }
+                        } else {
+                          const lastSet = currentSets[currentSets.length - 1]
+                          const setTimestamp = Date.now()
+                          const setRandomId = Math.random().toString(36).substr(2, 9)
+                          return {
+                            id: `set-${routineExercise.id}-${i}-${setTimestamp}-${setRandomId}`,
+                            routineExerciseId: routineExercise.id,
+                            setNumber: i + 1,
+                            targetReps: lastSet?.targetReps || "10",
+                            targetWeight: lastSet?.targetWeight || 0
+                          }
+                        }
+                      })
+                      
+                      onUpdate(routineExercise.id, { sets: newSets })
+                    }}
+                    className="h-8 bg-background border-input text-foreground"
+                    min="1"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground">Reps objetivo</label>
+                  <Input 
+                    type="text"
+                    value={representativeReps}
+                    onChange={(e) => {
+                      const targetReps = e.target.value || "10"
+                      const currentSets = [...(routineExercise.sets || [])]
+                      
+                      const updatedSets = currentSets.map(set => ({
+                        ...set,
+                        targetReps
+                      }))
+                      
+                      if (updatedSets.length === 0) {
+                        const setTimestamp = Date.now()
+                        const setRandomId = Math.random().toString(36).substr(2, 9)
+                        updatedSets.push({
+                          id: `set-${routineExercise.id}-0-${setTimestamp}-${setRandomId}`,
+                          routineExerciseId: routineExercise.id,
+                          setNumber: 1,
+                          targetReps,
+                          targetWeight: 0
+                        })
+                      }
+                      
+                      onUpdate(routineExercise.id, { sets: updatedSets })
+                    }}
+                    placeholder="ej: 8-12, Al Fallo, 15"
+                    className="h-8 bg-background border-input text-foreground"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground">Peso objetivo (kg)</label>
+                  <Input 
+                    type="number"
+                    value={representativeWeight}
+                    onChange={(e) => {
+                      const targetWeight = Math.max(0, parseInt(e.target.value) || 0)
+                      const currentSets = [...(routineExercise.sets || [])]
+                      
+                      const updatedSets = currentSets.map(set => ({
+                        ...set,
+                        targetWeight
+                      }))
+                      
+                      if (updatedSets.length === 0) {
+                        const setTimestamp = Date.now()
+                        const setRandomId = Math.random().toString(36).substr(2, 9)
+                        updatedSets.push({
+                          id: `set-${routineExercise.id}-0-${setTimestamp}-${setRandomId}`,
+                          routineExerciseId: routineExercise.id,
+                          setNumber: 1,
+                          targetReps: "10",
+                          targetWeight
+                        })
+                      }
+                      
+                      onUpdate(routineExercise.id, { sets: updatedSets })
+                    }}
+                    placeholder="0"
+                    className="h-8 bg-background border-input text-foreground"
+                    min="0"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground">Descanso (seg)</label>
+                  <Input 
+                    type="number"
+                    value={routineExercise.restTime || 90}
+                    onChange={(e) => {
+                      const restTime = Math.max(0, parseInt(e.target.value) || 90)
+                      onUpdate(routineExercise.id, { restTime })
+                    }}
+                    placeholder="90"
+                    className="h-8 bg-background border-input text-foreground"
+                    min="0"
+                  />
+                </div>
+              </div>
+
+              <div className="mt-3">
+                <label className="text-xs text-muted-foreground">Notas</label>
+                <Textarea 
+                  value={routineExercise.notes || ""}
+                  onChange={(e) => {
+                    onUpdate(routineExercise.id, { 
+                      notes: e.target.value 
+                    })
+                  }}
+                  placeholder="Notas del ejercicio..."
+                  className="h-16 resize-none text-sm bg-background border-input text-foreground"
+                />
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 export function RoutineEditPageClient({ routineId }: Props) {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -85,6 +310,17 @@ export function RoutineEditPageClient({ routineId }: Props) {
   const [isAddingExercise, setIsAddingExercise] = useState(false);
   const [localRoutine, setLocalRoutine] = useState<LocalRoutine | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   const calculateEstimatedDuration = (routine: LocalRoutine): number => {
     if (!routine.exercises || routine.exercises.length === 0) return 0;
@@ -315,6 +551,36 @@ export function RoutineEditPageClient({ routineId }: Props) {
       title: "Ejercicio eliminado",
       description: "El ejercicio se ha removido de tu rutina. Recuerda guardar los cambios.",
     })
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (over && active.id !== over.id && localRoutine) {
+      const oldIndex = localRoutine.exercises.findIndex(ex => ex.id === active.id);
+      const newIndex = localRoutine.exercises.findIndex(ex => ex.id === over.id);
+
+      if (oldIndex !== -1 && newIndex !== -1) {
+        const newExercises = arrayMove(localRoutine.exercises, oldIndex, newIndex);
+        
+        const reorderedExercises = newExercises.map((ex, index) => ({
+          ...ex,
+          order: index + 1,
+          sets: ex.sets?.map(set => ({ ...set })),
+          exercise: ex.exercise ? { ...ex.exercise } : undefined
+        }));
+
+        setLocalRoutine({
+          ...localRoutine,
+          exercises: reorderedExercises
+        });
+
+        toast({
+          title: "Ejercicios reordenados",
+          description: "El orden de los ejercicios se ha actualizado. Recuerda guardar los cambios.",
+        });
+      }
+    }
   };
 
   useEffect(() => {
@@ -625,190 +891,30 @@ export function RoutineEditPageClient({ routineId }: Props) {
                 <p className="text-sm">Agrega ejercicios para comenzar</p>
               </div>
             ) : (
-              <div className="space-y-4">
-                {localRoutine.exercises
-                  .sort((a, b) => a.order - b.order)
-                  .map((routineExercise, index) => {
-                    const representativeReps = routineExercise.sets?.[0]?.targetReps || "10";
-                    const representativeWeight = routineExercise.sets?.[0]?.targetWeight || 0;
-                    
-                    return (
-                    <Card key={`exercise-${routineExercise.id}`} className="bg-muted/20 border-border">
-                      <CardContent className="p-4">
-                        <div className="flex items-start gap-4">
-                          <div className="flex items-center gap-2">
-                            <GripVertical className="h-4 w-4 text-muted-foreground" />
-                            <span className="text-sm font-medium text-foreground">{index + 1}</span>
-                          </div>
-                          
-                          <div className="flex-1">
-                            <div className="flex items-center justify-between mb-2">
-                              <h4 className="font-medium text-foreground">{routineExercise.exercise?.title}</h4>
-                              <Button 
-                                variant="ghost" 
-                                size="sm"
-                                onClick={() => removeExerciseLocally(routineExercise.id)}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                            
-                            <div className="flex gap-1 mb-3">
-                              {((routineExercise.exercise as any)?.muscleGroups || []).map((muscle: string, muscleIdx: number) => (
-                                <Badge key={`muscle-${routineExercise.id}-${muscleIdx}-${muscle}`} variant="secondary" className="text-xs">
-                                  {muscle}
-                                </Badge>
-                              ))}
-                            </div>
-
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                              <div>
-                                <label className="text-xs text-muted-foreground">Sets</label>
-                                <Input 
-                                  key={`sets-input-${routineExercise.id}`}
-                                  type="number"
-                                  value={routineExercise.sets?.length || 1}
-                                  onChange={(e) => {
-                                    const newSetCount = Math.max(1, parseInt(e.target.value) || 1)
-                                    const currentSets = routineExercise.sets || []
-                                    
-                                    const newSets = Array.from({ length: newSetCount }, (_, i) => {
-                                      if (currentSets[i]) {
-                                        return { ...currentSets[i] }
-                                      } else {
-                                        const lastSet = currentSets[currentSets.length - 1]
-                                        const setTimestamp = Date.now()
-                                        const setRandomId = Math.random().toString(36).substr(2, 9)
-                                        const newSet = {
-                                          id: `set-${routineExercise.id}-${i}-${setTimestamp}-${setRandomId}`,
-                                          routineExerciseId: routineExercise.id,
-                                          setNumber: i + 1,
-                                          targetReps: lastSet?.targetReps || "10",
-                                          targetWeight: lastSet?.targetWeight || 0
-                                        }
-                                        return newSet
-                                      }
-                                    })
-                                    
-                                    updateLocalExercise(routineExercise.id, { sets: newSets })
-                                  }}
-                                  className="h-8 bg-background border-input text-foreground"
-                                  min="1"
-                                />
-                              </div>
-                              <div>
-                                <label className="text-xs text-muted-foreground">Reps objetivo</label>
-                                <Input 
-                                  key={`reps-input-${routineExercise.id}`}
-                                  type="text"
-                                  value={representativeReps}
-                                  onChange={(e) => {
-                                    const targetReps = e.target.value || "10"
-                                    const currentSets = [...(routineExercise.sets || [])]
-                                    
-                                    const updatedSets = currentSets.map(set => {
-                                      const updatedSet = {
-                                        ...set,
-                                        targetReps
-                                      }
-                                      return updatedSet
-                                    })
-                                    
-                                    if (updatedSets.length === 0) {
-                                      const setTimestamp = Date.now()
-                                      const setRandomId = Math.random().toString(36).substr(2, 9)
-                                      const defaultSet = {
-                                        id: `set-${routineExercise.id}-0-${setTimestamp}-${setRandomId}`,
-                                        routineExerciseId: routineExercise.id,
-                                        setNumber: 1,
-                                        targetReps,
-                                        targetWeight: 0
-                                      }
-                                      updatedSets.push(defaultSet)
-                                    }
-                                    
-                                    updateLocalExercise(routineExercise.id, { sets: updatedSets })
-                                  }}
-                                  placeholder="ej: 8-12, Al Fallo, 15"
-                                  className="h-8 bg-background border-input text-foreground"
-                                />
-                              </div>
-                              <div>
-                                <label className="text-xs text-muted-foreground">Peso objetivo (kg)</label>
-                                <Input 
-                                  key={`weight-input-${routineExercise.id}`}
-                                  type="number"
-                                  value={representativeWeight}
-                                  onChange={(e) => {
-                                    const targetWeight = Math.max(0, parseInt(e.target.value) || 0)
-                                    const currentSets = [...(routineExercise.sets || [])]
-                                    
-                                    const updatedSets = currentSets.map(set => {
-                                      const updatedSet = {
-                                        ...set,
-                                        targetWeight
-                                      }
-                                      return updatedSet
-                                    })
-                                    
-                                    if (updatedSets.length === 0) {
-                                      const setTimestamp = Date.now()
-                                      const setRandomId = Math.random().toString(36).substr(2, 9)
-                                      const defaultSet = {
-                                        id: `set-${routineExercise.id}-0-${setTimestamp}-${setRandomId}`,
-                                        routineExerciseId: routineExercise.id,
-                                        setNumber: 1,
-                                        targetReps: "10",
-                                        targetWeight
-                                      }
-                                      updatedSets.push(defaultSet)
-                                    }
-                                    
-                                    updateLocalExercise(routineExercise.id, { sets: updatedSets })
-                                  }}
-                                  placeholder="0"
-                                  className="h-8 bg-background border-input text-foreground"
-                                  min="0"
-                                />
-                              </div>
-                              <div>
-                                <label className="text-xs text-muted-foreground">Descanso (seg)</label>
-                                <Input 
-                                  key={`rest-input-${routineExercise.id}`}
-                                  type="number"
-                                  value={routineExercise.restTime || 90}
-                                  onChange={(e) => {
-                                    const restTime = Math.max(0, parseInt(e.target.value) || 90)
-                                    updateLocalExercise(routineExercise.id, { restTime })
-                                  }}
-                                  placeholder="90"
-                                  className="h-8 bg-background border-input text-foreground"
-                                  min="0"
-                                />
-                              </div>
-                            </div>
-
-                            <div className="mt-3">
-                              <label className="text-xs text-muted-foreground">Notas</label>
-                              <Textarea 
-                                key={`notes-input-${routineExercise.id}`}
-                                value={routineExercise.notes || ""}
-                                onChange={(e) => {
-                                  updateLocalExercise(routineExercise.id, { 
-                                    notes: e.target.value 
-                                  })
-                                }}
-                                placeholder="Notas del ejercicio..."
-                                className="h-16 resize-none text-sm bg-background border-input text-foreground"
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  )
-                })}
-              </div>
+              <DndContext 
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
+              >
+                <SortableContext 
+                  items={localRoutine.exercises.map(ex => ex.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <div className="space-y-4">
+                    {localRoutine.exercises
+                      .sort((a, b) => a.order - b.order)
+                      .map((routineExercise, index) => (
+                        <SortableRoutineExercise
+                          key={routineExercise.id}
+                          routineExercise={routineExercise}
+                          onUpdate={updateLocalExercise}
+                          onRemove={removeExerciseLocally}
+                          index={index}
+                        />
+                      ))}
+                  </div>
+                </SortableContext>
+              </DndContext>
             )}
           </CardContent>
         </Card>

@@ -1,8 +1,8 @@
 "use client"
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { useQuery, useMutation } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ofetch } from 'ofetch'
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/select";
 import { Routine, TrainingSession } from '@/types'
 import { useToast } from '@/hooks/use-toast'
+import { useTranslations, useLanguage } from '@/contexts/LanguageContext'
 
 interface QuickStartOption {
   id: string;
@@ -44,23 +45,50 @@ interface QuickStartOption {
 
 export function TrainingStartPageClient() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { toast } = useToast();
+  const t = useTranslations();
+  const { language } = useLanguage();
   const [searchQuery, setSearchQuery] = useState("");
   const [difficultyFilter, setDifficultyFilter] = useState<string>("all");
   const [muscleGroupFilter, setMuscleGroupFilter] = useState<string>("all");
 
-  const { data: routines = [], isLoading, error } = useQuery({
-    queryKey: ['routines', searchQuery, difficultyFilter, muscleGroupFilter],
+  const { data: allRoutines = [], isLoading, error } = useQuery({
+    queryKey: ['routines'],
     queryFn: async () => {
-      const params = new URLSearchParams()
-      if (searchQuery) params.append('search', searchQuery)
-      if (difficultyFilter !== 'all') params.append('difficulty', difficultyFilter)
-      if (muscleGroupFilter !== 'all') params.append('muscleGroup', muscleGroupFilter)
-      
-      const data = await ofetch<{ routines: Routine[] }>(`/api/routines?${params.toString()}`)
+      const data = await ofetch<{ routines: Routine[] }>('/api/routines')
       return data.routines
     },
   })
+
+  const routines = useMemo(() => {
+    let filtered = allRoutines;
+
+    if (searchQuery.trim()) {
+      const searchLower = searchQuery.toLowerCase().trim();
+      filtered = filtered.filter(routine => 
+        routine.title.toLowerCase().includes(searchLower) ||
+        routine.description?.toLowerCase().includes(searchLower) ||
+        routine.targetMuscleGroups?.some((muscle: string) => 
+          muscle.toLowerCase().includes(searchLower)
+        )
+      );
+    }
+
+    if (difficultyFilter !== 'all') {
+      filtered = filtered.filter(routine => routine.difficulty === difficultyFilter);
+    }
+
+    if (muscleGroupFilter !== 'all') {
+      filtered = filtered.filter(routine => 
+        routine.targetMuscleGroups?.some((muscle: string) => 
+          muscle.toLowerCase() === muscleGroupFilter.toLowerCase()
+        )
+      );
+    }
+
+    return filtered;
+  }, [allRoutines, searchQuery, difficultyFilter, muscleGroupFilter])
 
   const calculateEstimatedDuration = (routine: Routine): number => {
     if (!routine.exercises || routine.exercises.length === 0) return 30; 
@@ -143,8 +171,8 @@ export function TrainingStartPageClient() {
     },
     onError: (error: any) => {
       toast({
-        title: "Error",
-        description: error?.data?.error || "No se pudo iniciar la sesión de entrenamiento.",
+        title: t.common.error,
+        description: error?.data?.error || t.training.problemStartingSession,
         variant: "destructive"
       })
     }
@@ -154,8 +182,8 @@ export function TrainingStartPageClient() {
     const routine = routines.find(r => r.id === routineId)
     if (!routine) {
       toast({
-        title: "Error",
-        description: "Rutina no encontrada.",
+        title: t.common.error,
+        description: t.training.routineNotFound,
         variant: "destructive"
       })
       return
@@ -163,8 +191,8 @@ export function TrainingStartPageClient() {
     
     if (routine.exercises.length === 0) {
       toast({
-        title: "Error",
-        description: "La rutina no tiene ejercicios.",
+        title: t.common.error,
+        description: t.training.routineNoExercises,
         variant: "destructive"
       })
       return
@@ -179,8 +207,11 @@ export function TrainingStartPageClient() {
 
   const getDifficultyColor = (difficulty: string) => {
     switch (difficulty) {
+      case 'principiante':
       case 'beginner': return 'bg-green-500';
+      case 'intermedio':
       case 'intermediate': return 'bg-yellow-500';
+      case 'avanzado':
       case 'advanced': return 'bg-red-500';
       default: return 'bg-gray-500';
     }
@@ -188,15 +219,18 @@ export function TrainingStartPageClient() {
 
   const getDifficultyLabel = (difficulty: string) => {
     switch (difficulty) {
-      case 'beginner': return 'Principiante';
-      case 'intermediate': return 'Intermedio';
-      case 'advanced': return 'Avanzado';
+      case 'principiante':
+      case 'beginner': return t.training.beginner;
+      case 'intermedio':
+      case 'intermediate': return t.training.intermediate;
+      case 'avanzado':
+      case 'advanced': return t.training.advanced;
       default: return difficulty;
     }
   };
 
   const formatLastPerformed = (dateString?: string) => {
-    if (!dateString) return "Nunca";
+    if (!dateString) return t.training.never;
     
     const date = new Date(dateString);
     const now = new Date();
@@ -204,14 +238,34 @@ export function TrainingStartPageClient() {
     const diffMinutes = Math.floor(diffTime / (1000 * 60));
     const diffHours = Math.floor(diffTime / (1000 * 60 * 60));
     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-    
-    if (diffTime < 0 || diffMinutes < 1) return "Hace un momento";
-    if (diffMinutes < 60) return `Hace ${diffMinutes} min`;
-    if (diffHours < 24) return `Hace ${diffHours}h`;
-    if (diffDays === 1) return "Ayer";
-    if (diffDays < 7) return `Hace ${diffDays} días`;
-    if (diffDays < 30) return `Hace ${Math.ceil(diffDays / 7)} semanas`;
-    return `Hace ${Math.ceil(diffDays / 30)} meses`;
+
+    if (diffTime < 0 || diffMinutes < 1) return t.common.justNow;
+    if (diffMinutes < 60) {
+      return language === 'es' 
+        ? `${t.common.ago} ${diffMinutes} min` 
+        : `${diffMinutes} min ${t.common.ago}`;
+    }
+    if (diffHours < 24) {
+      return language === 'es' 
+        ? `${t.common.ago} ${diffHours}h` 
+        : `${diffHours}h ${t.common.ago}`;
+    }
+    if (diffDays === 1) return t.training.yesterday;
+    if (diffDays < 7) {
+      return language === 'es' 
+        ? `${t.common.ago} ${diffDays} ${t.common.days}` 
+        : `${diffDays} ${t.common.days} ${t.common.ago}`;
+    }
+    if (diffDays < 30) {
+      const weeks = Math.ceil(diffDays / 7);
+      return language === 'es' 
+        ? `${t.common.ago} ${weeks} ${t.common.weeks}` 
+        : `${weeks} ${t.common.weeks} ${t.common.ago}`;
+    }
+    const months = Math.ceil(diffDays / 30);
+    return language === 'es' 
+      ? `${t.common.ago} ${months} ${t.common.months}` 
+      : `${months} ${t.common.months} ${t.common.ago}`;
   };
 
   const getRatingStars = (rating?: number) => {
@@ -234,15 +288,15 @@ export function TrainingStartPageClient() {
   const quickStartOptions: QuickStartOption[] = [
     {
       id: "empty",
-      title: "Entrenamiento Libre",
-      description: "Comienza un entrenamiento sin rutina predefinida",
+      title: t.training.startEmptyWorkout,
+      description: t.training.emptyWorkoutDescription,
       icon: <Plus className="h-8 w-8" />,
       action: startEmptyWorkout
     },
     {
       id: "last",
-      title: "Última Rutina",
-      description: "Continúa con tu rutina más reciente",
+      title: t.training.lastRoutine,
+      description: t.training.lastRoutineDescription,
       icon: <History className="h-8 w-8" />,
       action: () => {
         const lastRoutine = routines
@@ -261,7 +315,7 @@ export function TrainingStartPageClient() {
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
             <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
-            <p className="text-muted-foreground">Cargando rutinas...</p>
+            <p className="text-muted-foreground">{t.training.loadingRoutines}</p>
           </div>
         </div>
       </div>
@@ -272,10 +326,10 @@ export function TrainingStartPageClient() {
     return (
       <div className="container mx-auto py-8 px-4">
         <div className="text-center">
-          <h1 className="text-2xl font-bold mb-4">Error al cargar rutinas</h1>
-          <p className="text-muted-foreground mb-4">Hubo un problema cargando tus rutinas.</p>
+          <h1 className="text-2xl font-bold mb-4">{t.training.failedToLoad}</h1>
+          <p className="text-muted-foreground mb-4">{t.training.problemLoadingRoutines}</p>
           <Button onClick={() => window.location.reload()}>
-            Reintentar
+            {t.common.retry}
           </Button>
         </div>
       </div>
@@ -286,9 +340,9 @@ export function TrainingStartPageClient() {
     <div className="container mx-auto py-8 px-4 max-w-6xl mb-16 md:mb-0">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-2">Comenzar Entrenamiento</h1>
+        <h1 className="text-3xl font-bold mb-2">{t.training.startTraining}</h1>
         <p className="text-muted-foreground">
-          Elige una rutina para comenzar tu sesión de entrenamiento
+          {t.training.chooseRoutineDescription}
         </p>
       </div>
 
@@ -320,7 +374,7 @@ export function TrainingStartPageClient() {
               <div className="relative">
                 <Search className="h-4 w-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
                 <Input
-                  placeholder="Buscar rutinas..."
+                  placeholder={t.training.searchRoutines}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-10"
@@ -329,21 +383,21 @@ export function TrainingStartPageClient() {
             </div>
             <Select value={difficultyFilter} onValueChange={setDifficultyFilter}>
               <SelectTrigger className="w-full md:w-48">
-                <SelectValue placeholder="Dificultad" />
+                <SelectValue placeholder={t.training.difficulty} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Todas las dificultades</SelectItem>
-                <SelectItem value="beginner">Principiante</SelectItem>
-                <SelectItem value="intermediate">Intermedio</SelectItem>
-                <SelectItem value="advanced">Avanzado</SelectItem>
+                <SelectItem value="all">{t.training.allDifficulties}</SelectItem>
+                <SelectItem value="principiante">{t.training.beginner}</SelectItem>
+                <SelectItem value="intermedio">{t.training.intermediate}</SelectItem>
+                <SelectItem value="avanzado">{t.training.advanced}</SelectItem>
               </SelectContent>
             </Select>
             <Select value={muscleGroupFilter} onValueChange={setMuscleGroupFilter}>
               <SelectTrigger className="w-full md:w-48">
-                <SelectValue placeholder="Grupo muscular" />
+                <SelectValue placeholder={t.training.muscleGroup} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Todos los grupos</SelectItem>
+                <SelectItem value="all">{t.training.allMuscleGroups}</SelectItem>
                 {allMuscleGroups.map(group => (
                   <SelectItem key={group} value={group.toLowerCase()}>{group}</SelectItem>
                 ))}
@@ -357,12 +411,12 @@ export function TrainingStartPageClient() {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-semibold">
-            Rutinas Disponibles ({routines.length})
+            {t.training.myRoutines} ({routines.length})
           </h2>
           <Button variant="outline" asChild>
             <Link href="/dashboard/routines/create">
               <Plus className="h-4 w-4 mr-2" />
-              Nueva Rutina
+              {t.routines.createRoutine}
             </Link>
           </Button>
         </div>
@@ -371,12 +425,12 @@ export function TrainingStartPageClient() {
           <Card className="h-64 flex items-center justify-center">
             <div className="text-center text-muted-foreground">
               <Dumbbell className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>No tienes rutinas creadas</p>
-              <p className="text-sm">Crea tu primera rutina para comenzar a entrenar</p>
+              <p>{t.training.noRoutines}</p>
+              <p className="text-sm">{t.routines.createFirstRoutine}</p>
               <Button asChild className="mt-4">
                 <Link href="/dashboard/routines/create">
                   <Plus className="h-4 w-4 mr-2" />
-                  Crear Rutina
+                  {t.routines.createRoutine}
                 </Link>
               </Button>
             </div>
@@ -405,15 +459,15 @@ export function TrainingStartPageClient() {
                   <div className="grid grid-cols-2 gap-4 text-sm">
                     <div className="flex items-center gap-2">
                       <Clock className="h-4 w-4 text-muted-foreground" />
-                      <span>{calculateEstimatedDuration(routine)}min</span>
+                      <span>{calculateEstimatedDuration(routine)}{t.common.min}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <Dumbbell className="h-4 w-4 text-muted-foreground" />
-                      <span>{routine.exercises.length} ejercicios</span>
+                      <span>{routine.exercises.length} {t.training.exercises}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <Target className="h-4 w-4 text-muted-foreground" />
-                      <span>{routine.timesPerformed || 0} veces</span>
+                      <span>{routine.timesPerformed || 0} {t.common.times}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <Calendar className="h-4 w-4 text-muted-foreground" />
@@ -457,12 +511,12 @@ export function TrainingStartPageClient() {
                       {createSessionMutation.isPending ? (
                         <>
                           <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Iniciando...
+                          {t.training.startingSession}
                         </>
                       ) : (
                         <>
                           <PlayCircle className="h-4 w-4 mr-2" />
-                          Comenzar
+                          {t.common.start}
                         </>
                       )}
                     </Button>
@@ -485,7 +539,7 @@ export function TrainingStartPageClient() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <TrendingUp className="h-5 w-5" />
-              Actividad Reciente
+              {t.training.recentActivity}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -503,7 +557,7 @@ export function TrainingStartPageClient() {
                       <div>
                         <p className="font-medium">{routine.title}</p>
                         <p className="text-sm text-muted-foreground">
-                          {formatLastPerformed(routine.lastPerformed)} • {calculateEstimatedDuration(routine)}min
+                          {formatLastPerformed(routine.lastPerformed)} • {calculateEstimatedDuration(routine)}{t.common.min}
                         </p>
                       </div>
                     </div>
@@ -516,10 +570,10 @@ export function TrainingStartPageClient() {
                       {createSessionMutation.isPending ? (
                         <>
                           <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Iniciando...
+                          {t.training.startingSession}
                         </>
                       ) : (
-                        "Repetir"
+                        t.training.repeatWorkout
                       )}
                     </Button>
                   </div>

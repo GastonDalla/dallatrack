@@ -16,7 +16,7 @@ import { Switch } from "@/components/ui/switch"
 import { Skeleton } from "@/components/ui/skeleton"
 import { User, Trophy, Target, Calendar, Weight, Ruler, Share2, Copy, Lock, Globe } from "lucide-react"
 import { useToast } from '@/hooks/use-toast'
-import { useTranslations } from '@/contexts/LanguageContext'
+import { useTranslations, useLanguage } from '@/contexts/LanguageContext'
 import { achievements, checkAchievements, getNextAchievements, getAchievementProgress, getRarityColor, type UserStats, type Achievement } from '@/lib/achievements'
 import { useAchievements } from '@/hooks/useAchievements'
 import { useStats } from '@/hooks/useStats'
@@ -33,6 +33,7 @@ interface UserProfile {
     fitnessLevel: string
     goals: string[]
     isPublic?: boolean
+    weeklyGoal?: number
   }
   preferences: {
     units: string
@@ -58,6 +59,7 @@ export function ProfilePageClient() {
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [selectedCategory, setSelectedCategory] = useState<string>('all')
   const t = useTranslations()
+  const { language } = useLanguage()
   const { checkAchievements: checkForNewAchievements } = useAchievements()
   const hasCheckedAchievements = useRef(false)
 
@@ -91,7 +93,7 @@ export function ProfilePageClient() {
     },
     onSuccess: () => {
       toast({
-        title: "Éxito",
+        title: t.profile.update.successTitle,
         description: t.profile.update.success
       })
     },
@@ -101,7 +103,7 @@ export function ProfilePageClient() {
       }
       const errorMessage = error?.data?.message || error?.message || t.profile.update.error
       toast({
-        title: "Error",
+        title: t.profile.update.errorTitle,
         description: errorMessage,
         variant: "destructive"
       })
@@ -126,15 +128,17 @@ export function ProfilePageClient() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['user', 'profile'] })
       toast({
-        title: "Éxito",
-        description: `${data.message}. Se procesaron ${data.sessionsProcessed} entrenamientos. ${data.newAchievements.length} logros desbloqueados.`
+        title: t.profile.update.successTitle,
+        description: t.profile.update.statsProcessed
+          .replace('{count}', data.sessionsProcessed.toString())
+          .replace('{achievements}', data.newAchievements.length.toString())
       })
     },
     onError: (error: any) => {
       console.error('Error migrando estadísticas:', error)
       toast({
-        title: "Error al migrar estadísticas",
-        description: error?.message || 'Inténtalo de nuevo más tarde',
+        title: t.profile.update.errorMigratingStats,
+        description: error?.message || t.profile.update.tryAgainLater,
         variant: "destructive"
       })
     }
@@ -151,10 +155,13 @@ export function ProfilePageClient() {
         
         const updatedProfile = { ...profileData }
         if (!updatedProfile.profile) {
-          updatedProfile.profile = { fitnessLevel: 'principiante', goals: [], isPublic: false }
+          updatedProfile.profile = { fitnessLevel: 'principiante', goals: [], isPublic: false, weeklyGoal: 3 }
         }
         if (updatedProfile.profile.isPublic === undefined) {
           updatedProfile.profile.isPublic = false
+        }
+        if (updatedProfile.profile.weeklyGoal === undefined) {
+          updatedProfile.profile.weeklyGoal = 3
         }
         return updatedProfile
       })
@@ -217,8 +224,8 @@ export function ProfilePageClient() {
     })
     
     toast({
-      title: checked ? 'Perfil configurado como público' : 'Perfil configurado como privado',
-      description: checked ? 'Otros usuarios podrán ver tu perfil' : 'Tu perfil ahora es privado'
+      title: checked ? t.profile.update.profileSetPublic : t.profile.update.profileSetPrivate,
+      description: checked ? t.profile.update.othersCanSeeProfile : t.profile.update.profileNowPrivate
     })
   }
 
@@ -227,8 +234,8 @@ export function ProfilePageClient() {
     const profileUrl = `${window.location.origin}/u/${profile._id}`
     navigator.clipboard.writeText(profileUrl)
     toast({
-      title: 'Link del perfil copiado',
-      description: 'El enlace se ha copiado al portapapeles'
+      title: t.profile.update.profileLinkCopied,
+      description: t.profile.update.linkCopiedToClipboard
     })
   }
 
@@ -462,7 +469,14 @@ export function ProfilePageClient() {
                   <h3 className="text-xl font-semibold">{profile.name}</h3>
                   <p className="text-muted-foreground">{profile.email}</p>
                   <Badge variant="secondary" className="mt-1">
-                    {t.profile.personalInfo.memberSince} {new Date(profile.createdAt).toLocaleDateString()}
+                    {t.profile.personalInfo.memberSince} {new Date(profile.createdAt).toLocaleDateString(
+                      language === 'es' ? 'es-ES' : 'en-US',
+                      { 
+                        year: 'numeric', 
+                        month: 'long', 
+                        day: 'numeric' 
+                      }
+                    )}
                   </Badge>
                 </div>
               </div>
@@ -486,7 +500,7 @@ export function ProfilePageClient() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="weight">{t.profile.personalInfo.weight} ({profile.preferences.units === 'metric' ? 'kg' : 'lbs'})</Label>
+                  <Label htmlFor="weight">{t.profile.personalInfo.weight} (kg)</Label>
                   <Input
                     id="weight"
                     type="number"
@@ -495,7 +509,7 @@ export function ProfilePageClient() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="height">{t.profile.personalInfo.height} ({profile.preferences.units === 'metric' ? 'cm' : 'ft'})</Label>
+                  <Label htmlFor="height">{t.profile.personalInfo.height} (cm)</Label>
                   <Input
                     id="height"
                     type="number"
@@ -521,19 +535,18 @@ export function ProfilePageClient() {
                   </Select>
                 </div>
                 <div>
-                  <Label htmlFor="units">{t.profile.personalInfo.units}</Label>
-                  <Select
-                    value={profile.preferences.units}
-                    onValueChange={(value) => updateProfile('preferences.units', value)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="metric">{t.profile.personalInfo.metric}</SelectItem>
-                      <SelectItem value="imperial">{t.profile.personalInfo.imperial}</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Label htmlFor="weekly-goal">{t.profile.personalInfo.weeklyGoal}</Label>
+                  <Input
+                    id="weekly-goal"
+                    type="number"
+                    min="1"
+                    max="7"
+                    value={profile.profile.weeklyGoal || 3}
+                    onChange={(e) => updateProfile('profile.weeklyGoal', parseInt(e.target.value) || 3)}
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {t.profile.personalInfo.weeklyGoalDescription}
+                  </p>
                 </div>
               </div>
             </CardContent>
@@ -617,7 +630,7 @@ export function ProfilePageClient() {
                     size="sm"
                     onClick={() => setSelectedCategory('all')}
                   >
-                    Todos ({unlockedAchievements.length})
+                    {t.profile.achievements.all.replace('{count}', unlockedAchievements.length.toString())}
                   </Button>
                   {Object.entries(achievementsByCategory).map(([category, stats]) => (
                     <Button
@@ -660,7 +673,7 @@ export function ProfilePageClient() {
                   </p>
                 ) : (
                   <p className="text-sm text-muted-foreground text-center py-4">
-                    No hay logros desbloqueados en esta categoría aún.
+                    {t.profile.achievements.noCategoryAchievementsMessage}
                   </p>
                 )}
               </div>

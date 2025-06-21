@@ -52,8 +52,9 @@ export function HistoryPageClient() {
         new Date(b.startTime).getTime() - new Date(a.startTime).getTime()
       )
     },
-    staleTime: 30 * 1000, 
-    refetchOnWindowFocus: true, 
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: true,
+    refetchOnMount: true,
   })
 
   useEffect(() => {
@@ -92,7 +93,7 @@ export function HistoryPageClient() {
   }, [sessions, selectedYear, selectedMonth])
 
   const filteredSessions = useMemo(() => {
-    return sessions.filter(session => {
+    const filtered = sessions.filter(session => {
       const sessionDate = new Date(session.startTime)
       
       if (selectedYear !== 'all' && getYear(sessionDate) !== parseInt(selectedYear)) {
@@ -109,6 +110,7 @@ export function HistoryPageClient() {
       
       return true
     })
+    return filtered
   }, [sessions, selectedYear, selectedMonth, selectedDay])
 
   const handleYearChange = (year: string) => {
@@ -405,7 +407,7 @@ export function HistoryPageClient() {
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
                         <CardTitle className="text-lg text-foreground">
-                          {session.routine?.title || "Workout"}
+                          {session.routine?.title || session.routineName || t.training.freeWorkout}
                         </CardTitle>
                         {!session.endTime && (
                           <div className="flex items-center gap-1 text-xs bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 px-2 py-1 rounded-full">
@@ -464,10 +466,10 @@ export function HistoryPageClient() {
                       const completedSets = exercise.sets.filter(set => set.completed).length
                       return (
                         <div 
-                          key={`${session.id}-exercise-${exercise.exerciseId || exercise.id || exerciseIndex}`}
+                          key={`${session.id}-exercise-${exercise.exerciseId || exerciseIndex}`}
                           className="text-xs px-2 py-1 bg-muted rounded-md flex gap-1.5"
                         >
-                          <span className="text-foreground">{exercise.exercise?.title || t.common.exercise}</span>
+                          <span className="text-foreground">{exercise.exercise?.title || exercise.exerciseName || t.common.exercise}</span>
                           <span className="text-muted-foreground">
                             {completedSets}/{exercise.sets.length} {t.common.sets}
                           </span>
