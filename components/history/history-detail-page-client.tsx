@@ -123,10 +123,10 @@ export function HistoryDetailPageClient({ sessionId }: Props) {
         if (set.completed) {
           totalSets++;
           completedSets++;
-          totalReps += set.reps;
-          totalWeight += set.weight * set.reps;
+          totalReps += set.reps || 0;
+          totalWeight += (set.weight || 0) * (set.reps || 0);
           
-          if (set.weight > 50) personalRecords++;
+          if ((set.weight || 0) > 50) personalRecords++;
         }
         totalPlannedReps += set.reps || 0;
       });
@@ -514,12 +514,12 @@ export function HistoryDetailPageClient({ sessionId }: Props) {
 
         {session.exercises.map((exercise, exerciseIndex) => {
           const completedSets = exercise.sets.filter(set => set.completed)
-          const exerciseWeight = completedSets.reduce((acc, set) => acc + (set.weight * set.reps), 0)
-          const maxWeight = Math.max(...completedSets.map(set => set.weight))
+          const exerciseWeight = completedSets.reduce((acc, set) => acc + ((set.weight || 0) * (set.reps || 0)), 0)
+          const maxWeight = Math.max(...completedSets.map(set => set.weight || 0))
           const completionPercentage = (completedSets.length / exercise.sets.length) * 100
           
           return (
-            <Card key={`${session.id}-exercise-${exercise.exerciseId || exercise.id || exerciseIndex}`} className="bg-card border-border hover:shadow-md transition-shadow">
+            <Card key={`${session.id}-exercise-${exercise.exerciseId || exerciseIndex}`} className="bg-card border-border hover:shadow-md transition-shadow">
               <CardHeader className="pb-3 md:pb-6">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <CardTitle className="text-base md:text-lg text-foreground">
@@ -571,7 +571,7 @@ export function HistoryDetailPageClient({ sessionId }: Props) {
                       <div className="flex items-center text-xs md:text-sm">
                         {set.completed && (
                           <div className="text-green-600 dark:text-green-400 font-medium">
-                            {set.weight * set.reps}kg {t.history.detail.volumeTotal.toLowerCase()}
+                            {(set.weight || 0) * (set.reps || 0)}kg {t.history.detail.volumeTotal.toLowerCase()}
                           </div>
                         )}
                       </div>
@@ -589,7 +589,7 @@ export function HistoryDetailPageClient({ sessionId }: Props) {
                     <div className="grid grid-cols-3 gap-3 md:gap-4 text-center">
                       <div>
                         <div className="text-base md:text-lg font-bold text-foreground">
-                          {completedSets.reduce((acc, set) => acc + set.reps, 0)}
+                          {completedSets.reduce((acc, set) => acc + (set.reps || 0), 0)}
                         </div>
                         <div className="text-xs text-muted-foreground">{t.history.detail.totalRepsExercise}</div>
                       </div>

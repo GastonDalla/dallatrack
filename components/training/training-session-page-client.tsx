@@ -441,7 +441,7 @@ export function TrainingSessionPageClient({ sessionId }: Props) {
           muscle.toLowerCase().includes(searchTerm.toLowerCase())
         )
       )
-  }, [availableExercises, session?.exercises, searchTerm])
+  }, [availableExercises, session, searchTerm])
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
