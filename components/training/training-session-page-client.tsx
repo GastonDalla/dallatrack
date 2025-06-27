@@ -124,13 +124,19 @@ function SortableExerciseItem({
   exerciseIndex, 
   isCurrentExercise, 
   onSelectExercise, 
-  completedSets 
+  completedSets,
+  onDeleteExercise,
+  translations,
+  isExerciseCompleted
 }: {
   exercise: any;
   exerciseIndex: number;
   isCurrentExercise: boolean;
   onSelectExercise: (index: number) => void;
   completedSets: number;
+  onDeleteExercise: (exerciseIndex: number) => void;
+  translations: any;
+  isExerciseCompleted: boolean;
 }) {
   const {
     attributes,
@@ -165,9 +171,9 @@ function SortableExerciseItem({
             <GripVertical className="h-4 w-4 text-muted-foreground" />
           </div>
           <div className="flex-1 min-w-0">
-            <h4 className="font-medium text-foreground truncate">{exercise.exerciseName || "Ejercicio"}</h4>
+            <h4 className="font-medium text-foreground truncate">{exercise.exerciseName || translations.exerciseDefaultName}</h4>
             <p className="text-sm text-muted-foreground">
-              {completedSets}/{exercise.sets.length} series completadas
+              {completedSets}/{exercise.sets.length} {translations.setsCompletedCount}
             </p>
           </div>
         </div>
@@ -176,21 +182,47 @@ function SortableExerciseItem({
             value={(completedSets / exercise.sets.length) * 100} 
             className="w-20 h-2"
           />
-          {!isCurrentExercise && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => onSelectExercise(exerciseIndex)}
-              className="text-xs"
-            >
-              Seleccionar
-            </Button>
-          )}
-          {isCurrentExercise && (
-            <Badge variant="default" className="text-xs">Actual</Badge>
-          )}
-          {completedSets === exercise.sets.length && (
-            <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
+          
+          {/* Mostrar información o botón según el estado */}
+          {isCurrentExercise ? (
+            <Badge variant="default" className="text-xs">{translations.currentExercise}</Badge>
+          ) : (
+            <>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onSelectExercise(exerciseIndex)}
+                className="text-xs"
+              >
+                {translations.selectExercise}
+              </Button>
+              {/* Solo mostrar menú de eliminar si el ejercicio NO está completado */}
+              {!isExerciseCompleted && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                      <ChevronDown className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem 
+                      onClick={() => onDeleteExercise(exerciseIndex)}
+                      className="text-destructive focus:text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      {translations.deleteExerciseButton}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+              {/* Mostrar indicador visual si está completado */}
+              {isExerciseCompleted && (
+                <div className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
+                  <CheckCircle2 className="h-3 w-3" />
+                  <span>{translations.exerciseCompleted}</span>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -223,6 +255,7 @@ export function TrainingSessionPageClient({ sessionId }: Props) {
   const [showAddExerciseDialog, setShowAddExerciseDialog] = useState(false);
   const [availableExercises, setAvailableExercises] = useState<Exercise[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [deleteExerciseDialog, setDeleteExerciseDialog] = useState<{open: boolean, exerciseIndex: number} | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -390,8 +423,10 @@ export function TrainingSessionPageClient({ sessionId }: Props) {
           clearInterval(restIntervalRef.current)
         }
         toast({
-          title: "Entrenamiento pausado",
-          description: "Puedes continuar cuando estés listo",
+          title: t.training.trainingPausedTitle,
+          description: t.training.pausedTrainingMessage || (language === 'es' 
+            ? 'Haz clic en "Reanudar" para continuar tu entrenamiento'
+            : 'Click "Resume" to continue your training'),
         })
       } else {
         if (pauseStartTime) {
@@ -400,15 +435,15 @@ export function TrainingSessionPageClient({ sessionId }: Props) {
           setPauseStartTime(null)
         }
         toast({
-          title: "Entrenamiento reanudado",
-          description: "¡Sigamos entrenando!",
+          title: t.training.trainingResumedTitle,
+          description: t.training.trainingResumedMessage,
         })
       }
     },
     onError: (error: any) => {
       toast({
-        title: "Error",
-        description: error?.data?.error || "Error al pausar/reanudar el entrenamiento",
+        title: t.common.error,
+        description: error?.data?.error || t.training.errorPausingResuming,
         variant: "destructive"
       })
     }
@@ -483,14 +518,14 @@ export function TrainingSessionPageClient({ sessionId }: Props) {
     onSuccess: (updatedSession) => {
       queryClient.setQueryData(['training-session', sessionId], updatedSession)
       toast({
-        title: "Ejercicios reordenados",
-        description: "El orden de los ejercicios se ha actualizado",
+        title: t.training.exercisesReordered,
+        description: t.training.exercisesReorderedMessage,
       })
     },
     onError: (error: any) => {
       toast({
-        title: "Error",
-        description: error?.data?.error || "Error al reordenar ejercicios",
+        title: t.common.error,
+        description: error?.data?.error || t.training.errorReorderingExercises,
         variant: "destructive"
       })
     }
@@ -524,14 +559,14 @@ export function TrainingSessionPageClient({ sessionId }: Props) {
       const currentExercise = updatedSession.exercises[updatedSession.currentExerciseIndex || 0];
       const exerciseName = (currentExercise as any)?.exerciseName || currentExercise?.exercise?.title || "ejercicio";
       toast({
-        title: "Ejercicio seleccionado",
-        description: `Ahora puedes continuar con ${exerciseName}`,
+        title: t.training.exerciseSelected,
+        description: t.training.exerciseSelectedMessage.replace('{exerciseName}', exerciseName),
       })
     },
     onError: (error: any) => {
       toast({
-        title: "Error",
-        description: error?.data?.error || "Error al seleccionar ejercicio",
+        title: t.common.error,
+        description: error?.data?.error || t.training.errorSelectingExercise,
         variant: "destructive"
       })
     }
@@ -543,8 +578,8 @@ export function TrainingSessionPageClient({ sessionId }: Props) {
     const selectedExercise = availableExercises.find(ex => ex.id === exerciseId);
     if (!selectedExercise) {
       toast({
-        title: "Error",
-        description: "Ejercicio no encontrado",
+        title: t.common.error,
+        description: t.training.exerciseNotFound,
         variant: "destructive"
       });
       return;
@@ -569,14 +604,14 @@ export function TrainingSessionPageClient({ sessionId }: Props) {
       setShowAddExerciseDialog(false)
       setSearchTerm('')
       toast({
-        title: "Ejercicio agregado",
-        description: "El ejercicio se ha agregado al entrenamiento",
+        title: t.training.exerciseAddedTitle,
+        description: t.training.exerciseAddedMessage,
       })
     },
     onError: (error: any) => {
       toast({
-        title: "Error",
-        description: error?.data?.error || "Error al agregar ejercicio",
+        title: t.common.error,
+        description: error?.data?.error || t.training.errorAddingExercise,
         variant: "destructive"
       })
     }
@@ -785,6 +820,98 @@ export function TrainingSessionPageClient({ sessionId }: Props) {
     pauseResumeMutation.mutate(false)
   }
 
+  const handleDeleteExercise = (exerciseIndex: number) => {
+    if (!session) return;
+    
+    const exercise = session.exercises[exerciseIndex];
+    const completedSets = exercise.sets.filter((set: any) => set.completed).length;
+    const isExerciseCompleted = completedSets === exercise.sets.length;
+    
+    if (isExerciseCompleted) {
+      toast({
+        title: t.common.error,
+        description: t.training.cannotDeleteCompletedExercise,
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    setDeleteExerciseDialog({ open: true, exerciseIndex });
+  };
+
+  const confirmDeleteExercise = () => {
+    if (!deleteExerciseDialog || !session) return;
+    
+    const exerciseIndex = deleteExerciseDialog.exerciseIndex;
+    
+    if (session.exercises.length <= 1) {
+      toast({
+        title: t.common.error,
+        description: t.training.cannotDeleteOnlyExercise,
+        variant: "destructive"
+      });
+      setDeleteExerciseDialog(null);
+      return;
+    }
+
+    const currentExerciseIndex = (session as any).currentExerciseIndex || 0;
+    if (exerciseIndex === currentExerciseIndex) {
+      toast({
+        title: t.common.error,
+        description: t.training.cannotDeleteCurrentExercise,
+        variant: "destructive"
+      });
+      setDeleteExerciseDialog(null);
+      return;
+    }
+
+    const exercise = session.exercises[exerciseIndex] as any;
+    const completedSets = exercise.sets.filter((set: any) => set.completed).length;
+    if (completedSets === exercise.sets.length && exercise.sets.length > 0) {
+      toast({
+        title: t.common.error,
+        description: t.training.cannotDeleteCompletedExercise,
+        variant: "destructive"
+      });
+      setDeleteExerciseDialog(null);
+      return;
+    }
+
+    let newCurrentExerciseIndex = currentExerciseIndex;
+    if (exerciseIndex === currentExerciseIndex) {
+      if (exerciseIndex === session.exercises.length - 1) {
+        newCurrentExerciseIndex = Math.max(0, exerciseIndex - 1);
+      }
+    } else if (exerciseIndex < currentExerciseIndex) {
+      newCurrentExerciseIndex = currentExerciseIndex - 1;
+    }
+
+    const updatedExercises = session.exercises.filter((_, index) => index !== exerciseIndex);
+    
+    ofetch(`/api/training-sessions/${sessionId}`, {
+      method: 'PUT',
+      body: { 
+        exercises: updatedExercises,
+        currentExerciseIndex: newCurrentExerciseIndex,
+        currentSetIndex: 0
+      }
+    }).then(() => {
+      queryClient.invalidateQueries({ queryKey: ['training-session', sessionId] });
+      toast({
+        title: t.training.exerciseDeletedFromSession,
+        description: t.common.success,
+      });
+    }).catch((error: any) => {
+      toast({
+        title: t.common.error,
+        description: error?.data?.error || t.training.failedToDeleteExercise,
+        variant: "destructive"
+      });
+    });
+    
+    setDeleteExerciseDialog(null);
+  };
+
   if (isLoading) {
     return (
       <div className="container mx-auto py-8 px-4">
@@ -931,8 +1058,12 @@ export function TrainingSessionPageClient({ sessionId }: Props) {
             <div className="flex items-center justify-center gap-3">
               <Pause className="h-5 w-5 text-orange-600 dark:text-orange-400" />
               <div className="text-center">
-                <h3 className="font-semibold text-foreground">Entrenamiento Pausado</h3>
-                <p className="text-sm text-muted-foreground">Haz clic en &ldquo;Reanudar&rdquo; para continuar tu entrenamiento</p>
+                <h3 className="font-semibold text-foreground">{t.training.trainingPausedTitle}</h3>
+                <p className="text-sm text-muted-foreground">
+                  {t.training.pausedTrainingMessage || (language === 'es' 
+                    ? 'Haz clic en "Reanudar" para continuar tu entrenamiento'
+                    : 'Click "Resume" to continue your training')}
+                </p>
               </div>
             </div>
           </CardContent>
@@ -977,11 +1108,10 @@ export function TrainingSessionPageClient({ sessionId }: Props) {
               <div>
                 <CardTitle className="flex items-center gap-2 text-foreground">
                   <Dumbbell className="h-5 w-5" />
-                  {(currentExercise as any).exerciseName || "Ejercicio"}
+                  {(currentExercise as any).exerciseName || t.training.exerciseDefaultName}
                 </CardTitle>
                 <p className="text-sm text-muted-foreground">
-                  Set {((session as any).currentSetIndex || 0) + 1} de {currentExercise.sets.length} • 
-                  Objetivo: {(currentExercise as any).targetReps || "N/A"} reps
+                  Set {((session as any).currentSetIndex || 0) + 1} {t.training.setOf} {currentExercise.sets.length} • {t.training.target} {(currentExercise as any).targetReps || t.training.notAvailable} reps
                   {(currentExercise as any).targetWeight && ` • ${(currentExercise as any).targetWeight}kg`}
                 </p>
               </div>
@@ -1035,7 +1165,7 @@ export function TrainingSessionPageClient({ sessionId }: Props) {
                   ) : isPaused ? (
                     <>
                       <Pause className="h-4 w-4 mr-2" />
-                      Pausado
+                      {t.training.paused}
                     </>
                   ) : (
                     <>
@@ -1101,7 +1231,6 @@ export function TrainingSessionPageClient({ sessionId }: Props) {
                       )}
                     </div>
                     
-                    {/* Botón eliminar set (solo si no está completado, no es el actual y hay más de 1 set) */}
                     {!set.completed && 
                      setIndex !== ((session as any).currentSetIndex || 0) && 
                      currentExercise.sets.length > 1 && (
@@ -1111,7 +1240,7 @@ export function TrainingSessionPageClient({ sessionId }: Props) {
                         onClick={() => handleDeleteSet((session as any).currentExerciseIndex || 0, setIndex)}
                         disabled={manageSetMutation.isPending}
                         className="h-6 w-6 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
-                        title="Eliminar set pendiente"
+                        title={t.training.deletePendingSet}
                       >
                         <Trash2 className="h-3 w-3" />
                       </Button>
@@ -1142,7 +1271,7 @@ export function TrainingSessionPageClient({ sessionId }: Props) {
       <Card className="bg-card border-border">
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle className="text-foreground">Ejercicios del entrenamiento</CardTitle>
+            <CardTitle className="text-foreground">{t.training.workoutExercises}</CardTitle>
             <Button
               variant="outline"
               size="sm"
@@ -1150,7 +1279,7 @@ export function TrainingSessionPageClient({ sessionId }: Props) {
               className="flex items-center gap-1"
             >
               <Plus className="h-3 w-3" />
-              Agregar ejercicio
+              {t.training.addExerciseToWorkout}
             </Button>
           </div>
         </CardHeader>
@@ -1168,6 +1297,7 @@ export function TrainingSessionPageClient({ sessionId }: Props) {
                 {session.exercises.map((exercise, exerciseIndex) => {
                   const completedSets = exercise.sets.filter(set => set.completed).length;
                   const isCurrentExercise = exerciseIndex === ((session as any).currentExerciseIndex || 0);
+                  const isExerciseCompleted = completedSets === exercise.sets.length;
                   
                   return (
                     <SortableExerciseItem
@@ -1177,6 +1307,9 @@ export function TrainingSessionPageClient({ sessionId }: Props) {
                       isCurrentExercise={isCurrentExercise}
                       onSelectExercise={selectCurrentExercise}
                       completedSets={completedSets}
+                      onDeleteExercise={handleDeleteExercise}
+                      translations={t.training}
+                      isExerciseCompleted={isExerciseCompleted}
                     />
                   );
                 })}
@@ -1190,17 +1323,16 @@ export function TrainingSessionPageClient({ sessionId }: Props) {
       <Dialog open={showAddExerciseDialog} onOpenChange={setShowAddExerciseDialog}>
         <DialogContent className="max-w-2xl bg-background border-border">
           <DialogHeader>
-            <DialogTitle className="text-foreground">Agregar ejercicio</DialogTitle>
+            <DialogTitle className="text-foreground">{t.training.addExerciseDialogTitle}</DialogTitle>
             <DialogDescription className="text-muted-foreground">
-              Busca y selecciona un ejercicio para agregar al entrenamiento actual
+              {t.training.addExerciseDialogDescription}
             </DialogDescription>
           </DialogHeader>
           
-          {/* Buscador */}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Buscar ejercicios por nombre, descripción o grupo muscular..."
+              placeholder={t.training.searchExercisesPlaceholder}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10 bg-background border-input text-foreground"
@@ -1212,9 +1344,15 @@ export function TrainingSessionPageClient({ sessionId }: Props) {
               <div className="text-center py-8 text-muted-foreground">
                 <Dumbbell className="h-12 w-12 mx-auto mb-4 opacity-50" />
                 {searchTerm ? (
-                  <p>No se encontraron ejercicios que coincidan con &ldquo;{searchTerm}&rdquo;</p>
+                  <p>{language === 'es' 
+                    ? `No se encontraron ejercicios que coincidan con "${searchTerm}"` 
+                    : `No exercises found matching "${searchTerm}"`}
+                  </p>
                 ) : (
-                  <p>Todos los ejercicios disponibles ya están en tu entrenamiento</p>
+                  <p>{t.training.allExercisesInWorkout || (language === 'es' 
+                    ? "Todos los ejercicios disponibles ya están en tu entrenamiento" 
+                    : "All available exercises are already in your workout")}
+                  </p>
                 )}
               </div>
             ) : (
@@ -1294,6 +1432,27 @@ export function TrainingSessionPageClient({ sessionId }: Props) {
         </DialogContent>
       </Dialog>
 
+      {/* Delete Exercise Confirmation Dialog */}
+      <AlertDialog open={deleteExerciseDialog?.open || false} onOpenChange={(open) => !open && setDeleteExerciseDialog(null)}>
+        <AlertDialogContent className="bg-background border-border">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-foreground">{t.training.deleteExerciseTitle}</AlertDialogTitle>
+            <AlertDialogDescription className="text-muted-foreground">
+              {t.training.deleteExerciseConfirm}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t.training.cancel}</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={confirmDeleteExercise}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {t.training.deleteExerciseButton}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Delete Set Confirmation Dialog */}
       <AlertDialog open={deleteSetDialog?.open || false} onOpenChange={(open) => !open && setDeleteSetDialog(null)}>
         <AlertDialogContent className="bg-background border-border">
@@ -1316,4 +1475,4 @@ export function TrainingSessionPageClient({ sessionId }: Props) {
       </AlertDialog>
     </div>
   );
-} 
+}

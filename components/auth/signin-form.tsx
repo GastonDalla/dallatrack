@@ -9,13 +9,14 @@ import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { Icons } from "@/components/ui/icons"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { AlertCircle } from "lucide-react"
+import { AlertCircle, Eye, EyeOff } from "lucide-react"
 import { useTranslations } from '@/contexts/LanguageContext'
 import Link from "next/link"
 
 export function SignInForm() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
   const router = useRouter()
@@ -125,15 +126,24 @@ export function SignInForm() {
         </div>
         <div className="space-y-2">
           <Label htmlFor="password">{t.auth.password}</Label>
-          <Input
-            id="password"
-            type="password"
-            placeholder="*******"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            disabled={isLoading}
-            required
-          />
+          <div className="relative">
+            <Input
+              id="password"
+              type={showPassword ? "text" : "password"}
+              placeholder="*******"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              disabled={isLoading}
+              required
+            />
+            <button
+              type="button"
+              className="absolute right-2 top-1/2 transform -translate-y-1/2 text-muted-foreground"
+              onClick={() => setShowPassword(!showPassword)}
+            >
+              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
           <div className="flex justify-end">
             <Link
               href="/forgot-password"

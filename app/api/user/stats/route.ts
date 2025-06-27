@@ -68,13 +68,15 @@ export async function POST(request: NextRequest) {
       setsCompleted: 0
     }
 
+    const streakData = await calculateNewStreak(session.user.id, db)
+
     const newStats = {
       totalWorkouts: currentStats.totalWorkouts + 1,
       totalTime: currentStats.totalTime + duration,
       totalWeight: (currentStats.totalWeight || 0) + totalWeight,
       setsCompleted: (currentStats.setsCompleted || 0) + setsCompleted,
-      currentStreak: calculateNewStreak(user, trainingSession.endTime || trainingSession.updatedAt),
-      longestStreak: Math.max(currentStats.longestStreak || 0, calculateNewStreak(user, trainingSession.endTime || trainingSession.updatedAt)),
+      currentStreak: streakData.currentStreak,
+      longestStreak: Math.max(currentStats.longestStreak || 0, streakData.longestStreak),
       achievements: currentStats.achievements || []
     }
 
@@ -135,15 +137,69 @@ export async function POST(request: NextRequest) {
   }
 }
 
-
-function calculateNewStreak(user: any, lastWorkoutDate: Date): number {
-  const now = new Date()
-  const lastWorkout = new Date(lastWorkoutDate)
-  const daysDifference = Math.floor((now.getTime() - lastWorkout.getTime()) / (1000 * 60 * 60 * 24))
-
-  if (daysDifference > 1) {
-    return 1 
-  }
+async function calculateNewStreak(userId: string, db: any): Promise<{ currentStreak: number, longestStreak: number }> {
+  const trainingSessions = db.collection("training_sessions")
   
-  return (user.stats?.currentStreak || 0) + 1
+  const completedSessions = await trainingSessions.find({
+    userId: userId,
+    isActive: false,
+    endTime: { $exists: true }
+  }).toArray()
+
+  if (completedSessions.length === 0) {
+    return { currentStreak: 1, longestStreak: 1 }
+  }
+
+  const workoutDays = new Set<string>()
+  completedSessions.forEach((session: any) => {
+    const sessionDate = new Date(session.endTime || session.updatedAt)
+    const dayString = sessionDate.toISOString().split('T')[0]
+    workoutDays.add(dayString)
+  })
+
+  const today = new Date()
+  let currentStreak = 0
+  let checkDate = new Date(today)
+
+  while (true) {
+    const checkDateString = checkDate.toISOString().split('T')[0]
+    
+    if (workoutDays.has(checkDateString)) {
+      currentStreak++
+      checkDate.setDate(checkDate.getDate() - 1)
+    } else {
+      if (currentStreak === 0) {
+        checkDate.setDate(checkDate.getDate() - 1)
+        const yesterdayString = checkDate.toISOString().split('T')[0]
+        if (workoutDays.has(yesterdayString)) {
+          currentStreak = 1
+          checkDate.setDate(checkDate.getDate() - 1)
+          continue
+        }
+      }
+      break
+    }
+  }
+
+  let longestStreak = 0
+  let tempStreak = 0
+
+  const sessionDates = completedSessions.map((session: any) => new Date(session.endTime || session.updatedAt))
+  const firstWorkoutDate = new Date(Math.min(...sessionDates.map((d: Date) => d.getTime())))
+  const daysBetween = Math.ceil((today.getTime() - firstWorkoutDate.getTime()) / (1000 * 60 * 60 * 24))
+
+  for (let i = 0; i <= daysBetween; i++) {
+    const currentDate = new Date(firstWorkoutDate)
+    currentDate.setDate(firstWorkoutDate.getDate() + i)
+    const currentDateString = currentDate.toISOString().split('T')[0]
+
+    if (workoutDays.has(currentDateString)) {
+      tempStreak++
+      longestStreak = Math.max(longestStreak, tempStreak)
+    } else {
+      tempStreak = 0
+    }
+  }
+
+  return { currentStreak, longestStreak }
 } 

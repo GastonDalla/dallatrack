@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { Icons } from "@/components/ui/icons"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { AlertCircle } from "lucide-react"
+import { AlertCircle, Eye, EyeOff } from "lucide-react"
 import { useTranslations } from '@/contexts/LanguageContext'
 
 export function SignUpForm() {
@@ -23,6 +23,8 @@ export function SignUpForm() {
     password: "",
     confirmPassword: ""
   })
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [error, setError] = useState("")
 
   const registerMutation = useMutation({
@@ -164,29 +166,47 @@ export function SignUpForm() {
         </div>
         <div className="space-y-2">
           <Label htmlFor="password">{t.auth.password}</Label>
-          <Input
-            id="password"
-            name="password"
-            type="password"
-            placeholder={t.auth.passwordPlaceholder}
-            value={formData.password}
-            onChange={handleChange}
-            required
-            disabled={isLoading}
-          />
+          <div className="relative">
+            <Input
+              id="password"
+              name="password"
+              type={showPassword ? "text" : "password"}
+              placeholder={t.auth.passwordPlaceholder}
+              value={formData.password}
+              onChange={handleChange}
+              required
+              disabled={isLoading}
+            />
+            <button
+              type="button"
+              className="absolute right-2 top-1/2 transform -translate-y-1/2 text-muted-foreground"
+              onClick={() => setShowPassword(!showPassword)}
+            >
+              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
         </div>
         <div className="space-y-2">
           <Label htmlFor="confirmPassword">{t.auth.confirmPassword}</Label>
-          <Input
-            id="confirmPassword"
-            name="confirmPassword"
-            type="password"
-            placeholder={t.auth.confirmPasswordPlaceholder}
-            value={formData.confirmPassword}
-            onChange={handleChange}
-            required
-            disabled={isLoading}
-          />
+          <div className="relative">
+            <Input
+              id="confirmPassword"
+              name="confirmPassword"
+              type={showConfirmPassword ? "text" : "password"}
+              placeholder={t.auth.confirmPasswordPlaceholder}
+              value={formData.confirmPassword}
+              onChange={handleChange}
+              required
+              disabled={isLoading}
+            />
+            <button
+              type="button"
+              className="absolute right-2 top-1/2 transform -translate-y-1/2 text-muted-foreground"
+              onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+            >
+              {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
         </div>
         <Button type="submit" className="w-full" disabled={isLoading}>
           {isLoading ? t.auth.signingUp : t.auth.createAccount}

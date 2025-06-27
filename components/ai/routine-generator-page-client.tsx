@@ -12,8 +12,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
 import { 
@@ -65,6 +63,23 @@ interface GeneratedRoutine {
 }
 
 interface FormData {
+  goal: string[];
+  customGoals: string[];
+  currentCustomGoal: string;
+  experience: string;
+  timeAvailable: string;
+  customTime: string;
+  equipment: string[];
+  customEquipment: string[];
+  currentCustomEquipment: string;
+  muscleGroups: string[];
+  customMuscleGroups: string[];
+  currentCustomMuscleGroup: string;
+  limitations: string;
+  preferences: string;
+}
+
+interface APIFormData {
   goal: string;
   experience: string;
   timeAvailable: string;
@@ -82,11 +97,18 @@ export function RoutineGeneratorPageClient() {
   
   const [currentStep, setCurrentStep] = useState(1);
   const [formData, setFormData] = useState<FormData>({
-    goal: '',
+    goal: [],
+    customGoals: [],
+    currentCustomGoal: '',
     experience: '',
     timeAvailable: '',
+    customTime: '',
     equipment: [] as string[],
+    customEquipment: [] as string[],
+    currentCustomEquipment: '',
     muscleGroups: [] as string[],
+    customMuscleGroups: [] as string[],
+    currentCustomMuscleGroup: '',
     limitations: '',
     preferences: ''
   });
@@ -133,7 +155,7 @@ export function RoutineGeneratorPageClient() {
   ];
 
   const generateRoutineMutation = useMutation({
-    mutationFn: async (formData: FormData) => {
+    mutationFn: async (formData: APIFormData) => {
       const response = await $fetch<GeneratedRoutine>('/api/ai/generate-routine', {
         method: 'POST',
         body: formData,
@@ -235,9 +257,89 @@ export function RoutineGeneratorPageClient() {
     }));
   };
 
+  const addCustomGoal = () => {
+    const goal = formData.currentCustomGoal.trim();
+    if (goal && !formData.customGoals.includes(goal)) {
+      setFormData(prev => ({
+        ...prev,
+        customGoals: [...prev.customGoals, goal],
+        currentCustomGoal: ''
+      }));
+    }
+  };
+
+  const removeCustomGoal = (goalToRemove: string) => {
+    setFormData(prev => ({
+      ...prev,
+      customGoals: prev.customGoals.filter(goal => goal !== goalToRemove)
+    }));
+  };
+
+  const handleCustomGoalKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addCustomGoal();
+    }
+  };
+
+  const addCustomEquipment = () => {
+    const equipment = formData.currentCustomEquipment.trim();
+    if (equipment && !formData.customEquipment.includes(equipment)) {
+      setFormData(prev => ({
+        ...prev,
+        customEquipment: [...prev.customEquipment, equipment],
+        currentCustomEquipment: ''
+      }));
+    }
+  };
+
+  const removeCustomEquipment = (equipmentToRemove: string) => {
+    setFormData(prev => ({
+      ...prev,
+      customEquipment: prev.customEquipment.filter(equipment => equipment !== equipmentToRemove)
+    }));
+  };
+
+  const handleCustomEquipmentKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addCustomEquipment();
+    }
+  };
+
+  const addCustomMuscleGroup = () => {
+    const muscleGroup = formData.currentCustomMuscleGroup.trim();
+    if (muscleGroup && !formData.customMuscleGroups.includes(muscleGroup)) {
+      setFormData(prev => ({
+        ...prev,
+        customMuscleGroups: [...prev.customMuscleGroups, muscleGroup],
+        currentCustomMuscleGroup: ''
+      }));
+    }
+  };
+
+  const removeCustomMuscleGroup = (muscleGroupToRemove: string) => {
+    setFormData(prev => ({
+      ...prev,
+      customMuscleGroups: prev.customMuscleGroups.filter(group => group !== muscleGroupToRemove)
+    }));
+  };
+
+  const handleCustomMuscleGroupKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addCustomMuscleGroup();
+    }
+  };
+
   const generateRoutine = async () => {
-    if (!formData.goal || !formData.experience || !formData.timeAvailable || 
-        formData.equipment.length === 0 || formData.muscleGroups.length === 0) {
+    const hasGoals = formData.goal.length > 0 || formData.customGoals.length > 0;
+    const hasEquipment = formData.equipment.length > 0 || formData.customEquipment.length > 0;
+    const hasMuscleGroups = formData.muscleGroups.length > 0 || formData.customMuscleGroups.length > 0;
+    const hasValidTime = formData.timeAvailable && 
+      (formData.timeAvailable !== 'custom' || (formData.customTime && parseInt(formData.customTime) >= 15 && parseInt(formData.customTime) <= 300));
+    
+    if (!hasGoals || !formData.experience || !hasValidTime || !hasEquipment || !hasMuscleGroups) {
       setError(t.routineGenerator.completeRequiredFields);
       toast({
         title: "Error",
@@ -247,7 +349,35 @@ export function RoutineGeneratorPageClient() {
       return;
     }
 
-    generateRoutineMutation.mutate(formData);
+    let goals = [...formData.goal, ...formData.customGoals];
+    
+    if (formData.currentCustomGoal.trim()) {
+      goals.push(formData.currentCustomGoal.trim());
+    }
+
+    let equipment = [...formData.equipment, ...formData.customEquipment];
+    if (formData.currentCustomEquipment.trim()) {
+      equipment.push(formData.currentCustomEquipment.trim());
+    }
+
+    let muscleGroups = [...formData.muscleGroups, ...formData.customMuscleGroups];
+    if (formData.currentCustomMuscleGroup.trim()) {
+      muscleGroups.push(formData.currentCustomMuscleGroup.trim());
+    }
+
+    const timeAvailable = formData.timeAvailable === 'custom' ? formData.customTime : formData.timeAvailable;
+
+    const dataToSend: APIFormData = {
+      goal: goals.join(', '),
+      experience: formData.experience,
+      timeAvailable: timeAvailable,
+      equipment: equipment,
+      muscleGroups: muscleGroups,
+      limitations: formData.limitations,
+      preferences: formData.preferences
+    };
+
+    generateRoutineMutation.mutate(dataToSend);
   };
 
   const saveRoutine = async () => {
@@ -290,9 +420,14 @@ export function RoutineGeneratorPageClient() {
   const getStepValidation = () => {
     switch (currentStep) {
       case 1:
-        return formData.goal && formData.experience && formData.timeAvailable;
+        const hasGoals = formData.goal.length > 0 || formData.customGoals.length > 0;
+        const hasValidTime = formData.timeAvailable && 
+          (formData.timeAvailable !== 'custom' || (formData.customTime && parseInt(formData.customTime) >= 15 && parseInt(formData.customTime) <= 300));
+        return hasGoals && formData.experience && hasValidTime;
       case 2:
-        return formData.equipment.length > 0 && formData.muscleGroups.length > 0;
+        const hasEquipment = formData.equipment.length > 0 || formData.customEquipment.length > 0;
+        const hasMuscleGroups = formData.muscleGroups.length > 0 || formData.customMuscleGroups.length > 0;
+        return hasEquipment && hasMuscleGroups;
       case 3:
         return true;
       default:
@@ -354,16 +489,87 @@ export function RoutineGeneratorPageClient() {
           <CardContent className="space-y-6">
             <div>
               <Label htmlFor="goal" className="text-base font-semibold">{t.routineGenerator.mainObjective}</Label>
-              <Select value={formData.goal} onValueChange={(value) => setFormData(prev => ({ ...prev, goal: value }))}>
-                <SelectTrigger className="mt-2">
-                  <SelectValue placeholder={t.routineGenerator.selectObjective} />
-                </SelectTrigger>
-                <SelectContent>
-                  {goalOptions.map(goal => (
-                    <SelectItem key={goal} value={goal}>{goal}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">
+                {goalOptions.map(goal => (
+                  <div key={goal} className="flex items-center space-x-2">
+                    <Checkbox
+                      id={goal}
+                      checked={formData.goal.includes(goal)}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          setFormData(prev => ({ ...prev, goal: [...prev.goal, goal] }));
+                        } else {
+                          setFormData(prev => ({ ...prev, goal: prev.goal.filter(g => g !== goal) }));
+                        }
+                      }}
+                    />
+                    <Label htmlFor={goal} className="cursor-pointer text-sm">{goal}</Label>
+                  </div>
+                ))}
+              </div>
+              
+              {/* Objetivo personalizado */}
+              <div className="mt-3">
+                <Label htmlFor="customGoals" className="text-sm font-medium">{t.routineGenerator.customGoalsLabel}</Label>
+                <div className="flex gap-2 mt-2">
+                  <Input
+                    id="customGoals"
+                    placeholder={t.routineGenerator.customGoalPlaceholder}
+                    value={formData.currentCustomGoal}
+                    onChange={(e) => setFormData(prev => ({ ...prev, currentCustomGoal: e.target.value }))}
+                    onKeyDown={handleCustomGoalKeyDown}
+                    className="flex-1"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={addCustomGoal}
+                    disabled={!formData.currentCustomGoal.trim()}
+                  >
+                    {t.routineGenerator.addGoal}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {t.routineGenerator.customGoalHelp}
+                </p>
+                
+                {/* Mostrar objetivos personalizados agregados */}
+                {formData.customGoals.length > 0 && (
+                  <div className="mt-3">
+                    <p className="text-sm text-muted-foreground mb-2">{t.routineGenerator.customGoalsAdded}:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {formData.customGoals.map(goal => (
+                        <Badge key={goal} variant="secondary" className="flex items-center gap-1">
+                          {goal}
+                          <button
+                            type="button"
+                            onClick={() => removeCustomGoal(goal)}
+                            className="ml-1 hover:bg-destructive hover:text-destructive-foreground rounded-full w-4 h-4 flex items-center justify-center text-xs"
+                          >
+                            ×
+                          </button>
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+              
+              {/* Mostrar objetivos seleccionados */}
+              {(formData.goal.length > 0 || formData.customGoals.length > 0) && (
+                <div className="mt-3">
+                  <p className="text-sm text-muted-foreground mb-2">{t.routineGenerator.objectivesSelected}</p>
+                  <div className="flex flex-wrap gap-1">
+                    {formData.goal.map(goal => (
+                      <Badge key={goal} variant="secondary">{goal}</Badge>
+                    ))}
+                    {formData.customGoals.map(goal => (
+                      <Badge key={goal} variant="secondary">{goal}</Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div>
@@ -408,8 +614,29 @@ export function RoutineGeneratorPageClient() {
                   <SelectItem value="75">75 {t.routineGenerator.minutes}</SelectItem>
                   <SelectItem value="90">90 {t.routineGenerator.minutes}</SelectItem>
                   <SelectItem value="120">2 {t.routineGenerator.hours}</SelectItem>
+                  <SelectItem value="custom">{t.routineGenerator.customTime}</SelectItem>
                 </SelectContent>
               </Select>
+              
+              {/* Campo de tiempo personalizado */}
+              {formData.timeAvailable === 'custom' && (
+                <div className="mt-3">
+                  <Label htmlFor="customTime" className="text-sm font-medium">{t.routineGenerator.customTimeLabel}</Label>
+                  <Input
+                    id="customTime"
+                    type="number"
+                    min="15"
+                    max="300"
+                    placeholder={t.routineGenerator.customTimePlaceholder}
+                    value={formData.customTime}
+                    onChange={(e) => setFormData(prev => ({ ...prev, customTime: e.target.value }))}
+                    className="mt-1"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {t.routineGenerator.customTimeHelp}
+                  </p>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -439,11 +666,64 @@ export function RoutineGeneratorPageClient() {
                   </div>
                 ))}
               </div>
-              {formData.equipment.length > 0 && (
+              
+              {/* Equipamiento personalizado */}
+              <div className="mt-4">
+                <Label htmlFor="customEquipment" className="text-sm font-medium">{t.routineGenerator.customEquipmentLabel}</Label>
+                <div className="flex gap-2 mt-2">
+                  <Input
+                    id="customEquipment"
+                    placeholder={t.routineGenerator.customEquipmentPlaceholder}
+                    value={formData.currentCustomEquipment}
+                    onChange={(e) => setFormData(prev => ({ ...prev, currentCustomEquipment: e.target.value }))}
+                    onKeyDown={handleCustomEquipmentKeyDown}
+                    className="flex-1"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={addCustomEquipment}
+                    disabled={!formData.currentCustomEquipment.trim()}
+                  >
+                    {t.routineGenerator.addEquipment}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {t.routineGenerator.customEquipmentHelp}
+                </p>
+                
+                {/* Mostrar equipamiento personalizado agregado */}
+                {formData.customEquipment.length > 0 && (
+                  <div className="mt-3">
+                    <p className="text-sm text-muted-foreground mb-2">{t.routineGenerator.customEquipmentAdded}:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {formData.customEquipment.map(equipment => (
+                        <Badge key={equipment} variant="secondary" className="flex items-center gap-1">
+                          {equipment}
+                          <button
+                            type="button"
+                            onClick={() => removeCustomEquipment(equipment)}
+                            className="ml-1 hover:bg-destructive hover:text-destructive-foreground rounded-full w-4 h-4 flex items-center justify-center text-xs"
+                          >
+                            ×
+                          </button>
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+              
+              {/* Mostrar equipamiento seleccionado */}
+              {(formData.equipment.length > 0 || formData.customEquipment.length > 0) && (
                 <div className="mt-4">
                   <p className="text-sm text-muted-foreground mb-2">{t.routineGenerator.selectedEquipment}</p>
                   <div className="flex flex-wrap gap-1">
                     {formData.equipment.map(equipment => (
+                      <Badge key={equipment} variant="secondary">{equipment}</Badge>
+                    ))}
+                    {formData.customEquipment.map(equipment => (
                       <Badge key={equipment} variant="secondary">{equipment}</Badge>
                     ))}
                   </div>
@@ -473,11 +753,64 @@ export function RoutineGeneratorPageClient() {
                   </div>
                 ))}
               </div>
-              {formData.muscleGroups.length > 0 && (
+              
+              {/* Grupos musculares personalizados */}
+              <div className="mt-4">
+                <Label htmlFor="customMuscleGroups" className="text-sm font-medium">{t.routineGenerator.customMuscleGroupsLabel}</Label>
+                <div className="flex gap-2 mt-2">
+                  <Input
+                    id="customMuscleGroups"
+                    placeholder={t.routineGenerator.customMuscleGroupsPlaceholder}
+                    value={formData.currentCustomMuscleGroup}
+                    onChange={(e) => setFormData(prev => ({ ...prev, currentCustomMuscleGroup: e.target.value }))}
+                    onKeyDown={handleCustomMuscleGroupKeyDown}
+                    className="flex-1"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={addCustomMuscleGroup}
+                    disabled={!formData.currentCustomMuscleGroup.trim()}
+                  >
+                    {t.routineGenerator.addMuscleGroup}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {t.routineGenerator.customMuscleGroupsHelp}
+                </p>
+                
+                {/* Mostrar grupos musculares personalizados agregados */}
+                {formData.customMuscleGroups.length > 0 && (
+                  <div className="mt-3">
+                    <p className="text-sm text-muted-foreground mb-2">{t.routineGenerator.customMuscleGroupsAdded}:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {formData.customMuscleGroups.map(group => (
+                        <Badge key={group} variant="secondary" className="flex items-center gap-1">
+                          {group}
+                          <button
+                            type="button"
+                            onClick={() => removeCustomMuscleGroup(group)}
+                            className="ml-1 hover:bg-destructive hover:text-destructive-foreground rounded-full w-4 h-4 flex items-center justify-center text-xs"
+                          >
+                            ×
+                          </button>
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+              
+              {/* Mostrar grupos musculares seleccionados */}
+              {(formData.muscleGroups.length > 0 || formData.customMuscleGroups.length > 0) && (
                 <div className="mt-4">
                   <p className="text-sm text-muted-foreground mb-2">{t.routineGenerator.selectedMuscleGroups}</p>
                   <div className="flex flex-wrap gap-1">
                     {formData.muscleGroups.map(group => (
+                      <Badge key={group} variant="secondary">{group}</Badge>
+                    ))}
+                    {formData.customMuscleGroups.map(group => (
                       <Badge key={group} variant="secondary">{group}</Badge>
                     ))}
                   </div>
@@ -532,19 +865,29 @@ export function RoutineGeneratorPageClient() {
               <h4 className="font-semibold mb-3">{t.routineGenerator.routineSummary}</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                 <div>
-                  <span className="font-medium">{t.routineGenerator.objective}</span> {formData.goal}
+                  <span className="font-medium">{t.routineGenerator.objective}</span> 
+                  {(() => {
+                    const allGoals = [...formData.goal, ...formData.customGoals];
+                    return allGoals.length > 0 ? allGoals.join(', ') : t.routineGenerator.selectObjective;
+                  })()}
                 </div>
                 <div>
                   <span className="font-medium">{t.routineGenerator.experience}</span> {getDifficultyText(formData.experience)}
                 </div>
                 <div>
-                  <span className="font-medium">{t.routineGenerator.duration}</span> {formData.timeAvailable} {t.routineGenerator.minutes}
+                  <span className="font-medium">{t.routineGenerator.duration}</span> {formData.timeAvailable === 'custom' ? `${formData.customTime} ${t.routineGenerator.minutes}` : `${formData.timeAvailable} ${t.routineGenerator.minutes}`}
                 </div>
                 <div>
-                  <span className="font-medium">{t.routineGenerator.equipment}</span> {formData.equipment.length} {t.routineGenerator.elements}
+                  <span className="font-medium">{t.routineGenerator.equipment}</span> {(() => {
+                    const totalEquipment = formData.equipment.length + formData.customEquipment.length;
+                    return `${totalEquipment} ${t.routineGenerator.elements}`;
+                  })()}
                 </div>
                 <div className="md:col-span-2">
-                  <span className="font-medium">{t.routineGenerator.muscleGroupsLabel}</span> {formData.muscleGroups.join(', ')}
+                  <span className="font-medium">{t.routineGenerator.muscleGroupsLabel}</span> {(() => {
+                    const allMuscleGroups = [...formData.muscleGroups, ...formData.customMuscleGroups];
+                    return allMuscleGroups.length > 0 ? allMuscleGroups.join(', ') : t.routineGenerator.selectMuscleGroups;
+                  })()}
                 </div>
               </div>
             </div>

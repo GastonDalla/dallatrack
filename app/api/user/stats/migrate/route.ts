@@ -70,33 +70,59 @@ export async function POST(request: NextRequest) {
     }
 
     if (sessionDates.length > 0) {
+      const workoutDays = new Set<string>()
+      sessionDates.forEach(date => {
+        const dayString = date.toISOString().split('T')[0]
+        workoutDays.add(dayString)
+      })
       
-      sessionDates.sort((a, b) => b.getTime() - a.getTime())
-
+      const uniqueDays = Array.from(workoutDays).sort().reverse()
+      
       const today = new Date()
-      today.setHours(23, 59, 59, 999) 
+      const todayString = today.toISOString().split('T')[0]
       
-      let streakDays = 0
+      currentStreak = 0
       let checkDate = new Date(today)
       
-      for (const sessionDate of sessionDates) {
-        const daysDiff = Math.floor((checkDate.getTime() - sessionDate.getTime()) / (1000 * 60 * 60 * 24))
+      while (true) {
+        const checkDateString = checkDate.toISOString().split('T')[0]
         
-        if (daysDiff <= 1) { 
-          streakDays++
-          checkDate = new Date(sessionDate)
-          checkDate.setHours(0, 0, 0, 0) 
-          checkDate.setDate(checkDate.getDate() - 1) 
+        if (workoutDays.has(checkDateString)) {
+          currentStreak++
+          checkDate.setDate(checkDate.getDate() - 1)
         } else {
+          if (currentStreak === 0) {
+            checkDate.setDate(checkDate.getDate() - 1)
+            const yesterdayString = checkDate.toISOString().split('T')[0]
+            if (workoutDays.has(yesterdayString)) {
+              currentStreak = 1
+              checkDate.setDate(checkDate.getDate() - 1)
+              continue
+            }
+          }
           break
         }
       }
       
-      currentStreak = streakDays
+      longestStreak = 0
+      let tempStreak = 0
       
+      const firstWorkoutDate = new Date(Math.min(...sessionDates.map(d => d.getTime())))
+      const daysBetween = Math.ceil((today.getTime() - firstWorkoutDate.getTime()) / (1000 * 60 * 60 * 24))
       
+      for (let i = 0; i <= daysBetween; i++) {
+        const currentDate = new Date(firstWorkoutDate)
+        currentDate.setDate(firstWorkoutDate.getDate() + i)
+        const currentDateString = currentDate.toISOString().split('T')[0]
+        
+        if (workoutDays.has(currentDateString)) {
+          tempStreak++
+          longestStreak = Math.max(longestStreak, tempStreak)
+        } else {
+          tempStreak = 0
+        }
+      }
       
-      longestStreak = Math.max(currentStreak, streakDays)
     }
 
     const newStats = {
