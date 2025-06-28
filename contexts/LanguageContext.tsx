@@ -518,6 +518,8 @@ const FALLBACK_TRANSLATIONS: Translations = {
     restTime: 'Tiempo de Descanso',
     addTime: 'Agregar {seconds}s',
     skipRest: 'Saltar Descanso',
+    restTimeRemaining: 'Tiempo restante',
+    skip: 'Saltar',
     exerciseCompleted: 'Ejercicio completado',
     selectAnotherExerciseOrAddMoreSets: 'Selecciona otro ejercicio o agrega más sets',
     setCompleted: 'Set completado',

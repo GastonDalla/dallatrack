@@ -586,7 +586,9 @@
     "notAvailable": "N/A",
     "cannotDeleteCompletedExercise": "No se puede eliminar un ejercicio con todos los sets completados",
     "exerciseCompleted": "Ejercicio completado",
-    "cannotDeleteCurrentExercise": "No se puede eliminar el ejercicio actual"
+    "cannotDeleteCurrentExercise": "No se puede eliminar el ejercicio actual",
+    "restTimeRemaining": "Tiempo restante",
+    "skip": "Saltar"
   },
   "history": {
     "title": "Historial",

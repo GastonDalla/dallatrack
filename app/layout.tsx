@@ -3,12 +3,14 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import { ThemeProvider } from '@/components/theme-provider';
 import { LanguageProvider } from '@/contexts/LanguageContext';
+import { RestTimerProvider } from '@/contexts/RestTimerContext';
 import { AuthSessionProvider } from '@/components/providers/session-provider';
 import { QueryProvider } from '@/components/providers/query-provider';
 import { Toaster } from '@/components/ui/toaster';
 import Navigation from '@/components/navigation';
 import { LoadingOverlay } from '@/components/ui/loading-overlay';
 import { PWAInstallPrompt } from '@/components/PWAInstallPrompt';
+import { GlobalRestTimer } from '@/components/global-rest-timer';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -84,12 +86,17 @@ export default function RootLayout({
           <QueryProvider>
             <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
               <LanguageProvider>
-                <LoadingOverlay />
-                <div className="flex min-h-screen flex-col bg-background">
-                  <Navigation />
-                  <main className="flex-1">{children}</main>
-                </div>
-                <Toaster />
+                <RestTimerProvider>
+                  <LoadingOverlay />
+                  <div className="flex min-h-screen flex-col bg-background">
+                    <Navigation />
+                    <main className="flex-1 overflow-auto">
+                      {children}
+                    </main>
+                  </div>
+                  <Toaster />
+                  <GlobalRestTimer />
+                </RestTimerProvider>
               </LanguageProvider>
             </ThemeProvider>
           </QueryProvider>

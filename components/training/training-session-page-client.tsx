@@ -32,7 +32,8 @@ import {
   GripVertical,
   ChevronDown,
   Edit,
-  Search
+  Search,
+  SkipForward
 } from "lucide-react";
 import {
   Dialog,
@@ -60,9 +61,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { TrainingSession, Exercise, SessionExercise } from "@/types";
-import { useTranslations, useLanguage } from '@/contexts/LanguageContext';
+import { useTranslations } from "@/contexts/LanguageContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 import Link from 'next/link'
 import { useStats } from '@/hooks/useStats'
+import { useRestTimer } from "@/contexts/RestTimerContext";
 
 import {
   DndContext,
@@ -219,7 +222,6 @@ function SortableExerciseItem({
               {isExerciseCompleted && (
                 <div className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
                   <CheckCircle2 className="h-3 w-3" />
-                  <span>{translations.exerciseCompleted}</span>
                 </div>
               )}
             </>
@@ -236,10 +238,9 @@ export function TrainingSessionPageClient({ sessionId }: Props) {
   const { toast } = useToast();
   const t = useTranslations();
   const { language } = useLanguage();
+  const restTimer = useRestTimer();
   const [currentReps, setCurrentReps] = useState<number | undefined>();
   const [currentWeight, setCurrentWeight] = useState<number | undefined>();
-  const [restTimer, setRestTimer] = useState<number>(0);
-  const [isResting, setIsResting] = useState(false);
   const [sessionDuration, setSessionDuration] = useState<number>(0);
   const [showFinishDialog, setShowFinishDialog] = useState(false);
   const [sessionRating, setSessionRating] = useState<number>(0);
@@ -248,14 +249,13 @@ export function TrainingSessionPageClient({ sessionId }: Props) {
   const [isPaused, setIsPaused] = useState<boolean>(false);
   const [pausedTime, setPausedTime] = useState<number>(0);
   const [pauseStartTime, setPauseStartTime] = useState<number | null>(null);
-  const restIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const durationIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const { updateStats } = useStats();
 
   const [showAddExerciseDialog, setShowAddExerciseDialog] = useState(false);
   const [availableExercises, setAvailableExercises] = useState<Exercise[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [deleteExerciseDialog, setDeleteExerciseDialog] = useState<{open: boolean, exerciseIndex: number} | null>(null);
+  const durationIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -335,8 +335,7 @@ export function TrainingSessionPageClient({ sessionId }: Props) {
       const currentExercise = updatedSession.exercises[currentExerciseIndex]
       
       if (currentSetIndex < currentExercise.sets.length) {
-        setRestTimer((currentExercise as any).restTime || 90)
-        setIsResting(true)
+        restTimer.startRestTimer(sessionId, (currentExercise as any).restTime || 90);
       } else {
         toast({
           title: t.training.exerciseCompleted,
@@ -419,9 +418,7 @@ export function TrainingSessionPageClient({ sessionId }: Props) {
         if (durationIntervalRef.current) {
           clearInterval(durationIntervalRef.current)
         }
-        if (restIntervalRef.current) {
-          clearInterval(restIntervalRef.current)
-        }
+        restTimer.stopRestTimer();
         toast({
           title: t.training.trainingPausedTitle,
           description: t.training.pausedTrainingMessage || (language === 'es' 
@@ -642,26 +639,6 @@ export function TrainingSessionPageClient({ sessionId }: Props) {
   }, [session, isPaused, pausedTime]);
 
   useEffect(() => {
-    if (isResting && restTimer > 0 && !isPaused) {
-      restIntervalRef.current = setInterval(() => {
-        setRestTimer(prev => {
-          if (prev <= 1) {
-            setIsResting(false);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    }
-
-    return () => {
-      if (restIntervalRef.current) {
-        clearInterval(restIntervalRef.current);
-      }
-    };
-  }, [isResting, restTimer, isPaused]);
-
-  useEffect(() => {
     const errorMessage = t.common.error
     const failedToLoadMessage = t.training.failedToLoadSession
     
@@ -709,15 +686,11 @@ export function TrainingSessionPageClient({ sessionId }: Props) {
   };
 
   const skipRestTimer = () => {
-    setIsResting(false);
-    setRestTimer(0);
-    if (restIntervalRef.current) {
-      clearInterval(restIntervalRef.current);
-    }
+    restTimer.skipTimer();
   };
 
   const addRestTime = (seconds: number) => {
-    setRestTimer(prev => prev + seconds);
+    restTimer.addTime(seconds);
   };
 
   const finishSessionMutation = useMutation({
@@ -786,6 +759,7 @@ export function TrainingSessionPageClient({ sessionId }: Props) {
   })
 
   const finishWorkout = async () => {
+    restTimer.stopRestTimer();
     finishSessionMutation.mutate()
   };
 
@@ -1071,7 +1045,7 @@ export function TrainingSessionPageClient({ sessionId }: Props) {
       )}
 
       {/* Rest Timer */}
-      {isResting && (
+      {restTimer.isActive && (
         <Card className="mb-6 border-amber-200 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-950/50">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
@@ -1079,7 +1053,7 @@ export function TrainingSessionPageClient({ sessionId }: Props) {
                 <Timer className="h-5 w-5 text-amber-600 dark:text-amber-400" />
                 <div>
                   <h3 className="font-semibold text-foreground">{t.training.restTime}</h3>
-                  <p className="text-2xl font-bold text-amber-700 dark:text-amber-300">{formatTime(restTimer)}</p>
+                  <p className="text-2xl font-bold text-amber-700 dark:text-amber-300">{formatTime(restTimer.currentTime)}</p>
                 </div>
               </div>
               <div className="flex gap-2">

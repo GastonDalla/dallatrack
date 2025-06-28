@@ -592,7 +592,9 @@
     "customTimeLabel": "Custom time (minutes)",
     "customTimePlaceholder": "E.g.: 40, 55, 100...",
     "customTimeHelp": "Enter time in minutes (between 15 and 300 minutes)",
-    "cannotDeleteCurrentExercise": "Cannot delete the current exercise"
+    "cannotDeleteCurrentExercise": "Cannot delete the current exercise",
+    "restTimeRemaining": "Rest time remaining",
+    "skip": "Skip"
   },
   "history": {
     "title": "History",
