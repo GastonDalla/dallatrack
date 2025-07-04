@@ -367,10 +367,39 @@ export function TrainingSessionPageClient({ sessionId }: Props) {
         method: 'POST',
         body: { exerciseIndex, action, setIndex }
       })
-      return data
+      return { ...data, exerciseIndex, action }
     },
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
+      const { exerciseIndex, action } = data
+      
       queryClient.invalidateQueries({ queryKey: ['training-session', sessionId] })
+      
+      if (session && action === 'add') {
+        const currentExerciseIndex = (session as any).currentExerciseIndex || 0
+        
+        if (exerciseIndex === currentExerciseIndex) {
+          const currentExercise = session.exercises[currentExerciseIndex]
+          const completedSets = currentExercise.sets.filter(set => set.completed).length
+          
+          if (completedSets === currentExercise.sets.length) {
+            const newSetIndex = currentExercise.sets.length
+            
+            try {
+              await ofetch(`/api/training-sessions/${sessionId}`, {
+                method: 'PUT',
+                body: { 
+                  currentSetIndex: newSetIndex
+                }
+              })
+              
+              queryClient.invalidateQueries({ queryKey: ['training-session', sessionId] })
+            } catch (error) {
+              console.error('Error actualizando currentSetIndex:', error)
+            }
+          }
+        }
+      }
+      
       toast({
         title: data.message,
         description: t.common.success,
@@ -531,9 +560,23 @@ export function TrainingSessionPageClient({ sessionId }: Props) {
   const selectCurrentExercise = (exerciseIndex: number) => {
     if (!session) return;
     
+    const selectedExercise = session.exercises[exerciseIndex];
+    let targetSetIndex = 0;
+    
+    for (let i = 0; i < selectedExercise.sets.length; i++) {
+      if (!selectedExercise.sets[i].completed) {
+        targetSetIndex = i;
+        break;
+      }
+    }
+    
+    if (selectedExercise.sets.every(set => set.completed)) {
+      targetSetIndex = selectedExercise.sets.length - 1;
+    }
+    
     selectExerciseMutation.mutate({ 
       exerciseIndex,
-      setIndex: 0
+      setIndex: targetSetIndex
     });
   };
 
